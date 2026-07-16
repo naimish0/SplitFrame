@@ -12,6 +12,7 @@ import com.example.splitframe.domain.ImageSource
 import com.example.splitframe.domain.ImageTransform
 import com.example.splitframe.domain.LayoutTemplate
 import com.example.splitframe.domain.MergeProject
+import com.example.splitframe.domain.TemplateCatalog
 import com.example.splitframe.domain.TemplateRepository
 import com.example.splitframe.export.ImageExportRepository
 import com.example.splitframe.export.ImageSourceReader
@@ -235,8 +236,12 @@ class MergeViewModel(
                 reduce(MergeResultEvent.Failed(R.string.enhance_failed))
                 return@launch
             }
-            val dimensions = withContext(Dispatchers.IO) {
-                imageSourceReader.dimensions(enhanced)
+            val dimensions = try {
+                withContext(Dispatchers.IO) {
+                    imageSourceReader.dimensions(enhanced)
+                }
+            } catch (_: Throwable) {
+                null
             }
             reduce(MergeResultEvent.EnhancementFinished(cellIndex, enhanced, dimensions))
         }
@@ -497,12 +502,14 @@ class MergeViewModel(
     }
 
     private fun templateForImageCount(count: Int): LayoutTemplate? =
-        when (count) {
-            0 -> _state.value.project?.template ?: templates.firstOrNull()
-            7 -> templates.firstOrNull { it.id == com.example.splitframe.domain.TemplateIds.ADAPTIVE_GRID_7 }
-            8 -> templates.firstOrNull { it.id == com.example.splitframe.domain.TemplateIds.ADAPTIVE_GRID_8 }
-            9 -> templates.firstOrNull { it.id == com.example.splitframe.domain.TemplateIds.ADAPTIVE_GRID_9 }
-            else -> templates.firstOrNull { it.cells.size == count && it.kind != com.example.splitframe.domain.TemplateKind.BeforeAfter }
+        if (count == 0) {
+            _state.value.project?.template ?: templates.firstOrNull()
+        } else {
+            TemplateCatalog.compatibleOrFallback(
+                templates = templates.filter { it.kind == com.example.splitframe.domain.TemplateKind.Standard },
+                imageCount = count,
+                fallback = templateRepository::fallbackGridTemplate,
+            ).firstOrNull()
         }
 
     private fun projectWithOrderedSources(

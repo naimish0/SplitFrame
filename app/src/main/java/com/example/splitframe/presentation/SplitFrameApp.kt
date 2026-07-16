@@ -16,10 +16,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.splitframe.ads.SplitFrameAdManager
 import com.example.splitframe.domain.ExportResult
+import com.example.splitframe.domain.TemplateFilter
 import com.example.splitframe.presentation.merge.EditorScreen
 import com.example.splitframe.presentation.merge.MergeIntent
 import com.example.splitframe.presentation.merge.MergeViewModel
 import com.example.splitframe.presentation.merge.TemplatePickerScreen
+import com.example.splitframe.presentation.single.SingleImageIntent
+import com.example.splitframe.presentation.single.SingleImageScreen
+import com.example.splitframe.presentation.single.SingleImageViewModel
 import kotlin.random.Random
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -27,6 +31,7 @@ import org.koin.compose.koinInject
 private enum class AppScreen {
     Templates,
     Editor,
+    SingleImage,
 }
 
 @Composable
@@ -39,6 +44,7 @@ fun SplitFrameApp(
     var screen by remember { mutableStateOf(AppScreen.Templates) }
     var lastShownAdUri by rememberSaveable { mutableStateOf<String?>(null) }
     val templateGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+    var templateFilter by rememberSaveable { mutableStateOf(TemplateFilter.ALL) }
     val templatePaletteSeed = rememberSaveable { Random.nextInt() }
 
     LaunchedEffect(Unit) {
@@ -57,6 +63,9 @@ fun SplitFrameApp(
             state = state,
             paletteSeed = templatePaletteSeed,
             gridState = templateGridState,
+            selectedFilter = templateFilter,
+            onFilterSelected = { templateFilter = it },
+            onOpenSingleImageTool = { screen = AppScreen.SingleImage },
             onTemplateSelected = { templateId ->
                 viewModel.process(MergeIntent.SelectTemplate(templateId))
                 screen = AppScreen.Editor
@@ -70,6 +79,23 @@ fun SplitFrameApp(
                 state = state,
                 onIntent = viewModel::process,
                 onBack = { screen = AppScreen.Templates },
+            )
+        }
+        AppScreen.SingleImage -> {
+            val singleImageViewModel = koinViewModel<SingleImageViewModel>()
+            val singleImageState by singleImageViewModel.state.collectAsStateWithLifecycle()
+            BackHandler {
+                screen = AppScreen.Templates
+            }
+            SingleImageScreen(
+                state = singleImageState,
+                onIntent = singleImageViewModel::process,
+                onBack = { screen = AppScreen.Templates },
+                onUseInCollage = { source ->
+                    viewModel.process(MergeIntent.AssignImages(listOf(source)))
+                    singleImageViewModel.process(SingleImageIntent.ClearResult)
+                    screen = AppScreen.Templates
+                },
             )
         }
     }

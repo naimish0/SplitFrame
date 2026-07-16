@@ -410,7 +410,18 @@ class TemplateRepository {
             defaultCornerRadiusDp = 18f,
             kind = TemplateKind.BeforeAfter,
         ),
-    )
+    ) + generatedTemplateVariants()
+
+    fun fallbackGridTemplate(count: Int): LayoutTemplate =
+        generatedGridTemplate(
+            count = count.coerceIn(1, CollageLimits.MaxImages),
+            orientation = TemplateOrientation.Square,
+            variant = "fallback",
+            displayName = "Fallback grid ${count.coerceIn(1, CollageLimits.MaxImages)}",
+        )
+
+    fun templatesBySlotCount(): Map<Int, List<LayoutTemplate>> =
+        templates().groupBy { it.slotCount }
 
     private fun gridCells(columns: Int, rows: Int): List<LayoutCell> =
         buildList {
@@ -455,5 +466,167 @@ class TemplateRepository {
                     index += 1
                 }
             }
+        }
+
+    private fun generatedTemplateVariants(): List<LayoutTemplate> =
+        (1..CollageLimits.MaxImages).flatMap { count ->
+            listOf(
+                generatedGridTemplate(
+                    count = count,
+                    orientation = TemplateOrientation.Square,
+                    variant = "balanced",
+                    displayName = "Balanced grid $count",
+                ),
+                generatedGridTemplate(
+                    count = count,
+                    orientation = TemplateOrientation.Portrait,
+                    variant = "portrait",
+                    displayName = "Portrait grid $count",
+                ),
+                generatedHeroTemplate(count = count, orientation = TemplateOrientation.Landscape),
+                generatedHeroTemplate(count = count, orientation = TemplateOrientation.Portrait),
+                generatedMosaicTemplate(count = count),
+            )
+        }
+
+    private fun generatedGridTemplate(
+        count: Int,
+        orientation: TemplateOrientation,
+        variant: String,
+        displayName: String,
+    ): LayoutTemplate {
+        val columns = when (orientation) {
+            TemplateOrientation.Portrait -> if (count <= 2) 1 else 3
+            TemplateOrientation.Landscape -> if (count <= 3) count else 4
+            TemplateOrientation.Square -> when {
+                count <= 1 -> 1
+                count <= 4 -> 2
+                count <= 9 -> 3
+                else -> 4
+            }
+        }
+        return LayoutTemplate(
+            id = "generated_grid_${variant}_$count",
+            name = displayName,
+            cells = adaptiveGridCells(count = count, columns = columns.coerceAtLeast(1)),
+            defaultSpacingDp = if (count >= 10) 4f else 6f,
+            defaultCornerRadiusDp = if (count >= 10) 9f else 12f,
+            aspectRatio = orientation.aspectRatio(),
+            metadata = TemplateMetadata(
+                category = TemplateCategory.Grid,
+                previewAsset = "generated/grid/$variant/$count",
+                supportedOrientations = setOf(orientation),
+            ),
+        )
+    }
+
+    private fun generatedHeroTemplate(
+        count: Int,
+        orientation: TemplateOrientation,
+    ): LayoutTemplate {
+        val cells = if (count == 1) {
+            listOf(LayoutCell(NormalizedRect.Full, 0))
+        } else {
+            when (orientation) {
+                TemplateOrientation.Portrait -> heroTopCells(count)
+                else -> heroLeftCells(count)
+            }
+        }
+        val variant = if (orientation == TemplateOrientation.Portrait) "portrait" else "landscape"
+        return LayoutTemplate(
+            id = "generated_hero_${variant}_$count",
+            name = "Hero ${variant.replaceFirstChar { it.uppercase() }} $count",
+            cells = cells,
+            defaultSpacingDp = if (count >= 10) 4f else 6f,
+            defaultCornerRadiusDp = if (count >= 10) 9f else 13f,
+            aspectRatio = orientation.aspectRatio(),
+            metadata = TemplateMetadata(
+                category = TemplateCategory.Magazine,
+                previewAsset = "generated/hero/$variant/$count",
+                supportedOrientations = setOf(orientation),
+            ),
+        )
+    }
+
+    private fun generatedMosaicTemplate(count: Int): LayoutTemplate {
+        val cells = when {
+            count == 1 -> listOf(LayoutCell(NormalizedRect.Full, 0))
+            count == 2 -> listOf(
+                LayoutCell(NormalizedRect(0f, 0f, 0.62f, 1f), 0),
+                LayoutCell(NormalizedRect(0.62f, 0f, 0.38f, 1f), 1),
+            )
+            else -> {
+                val topHeight = 0.46f
+                val top = listOf(
+                    LayoutCell(NormalizedRect(0f, 0f, 0.58f, topHeight), 0),
+                    LayoutCell(NormalizedRect(0.58f, 0f, 0.42f, topHeight), 1),
+                )
+                top + adaptiveGridCells(count - 2, columns = if (count <= 8) 3 else 4).map { cell ->
+                    LayoutCell(
+                        rect = NormalizedRect(
+                            x = cell.rect.x,
+                            y = topHeight + cell.rect.y * (1f - topHeight),
+                            width = cell.rect.width,
+                            height = cell.rect.height * (1f - topHeight),
+                        ),
+                        index = cell.index + 2,
+                    )
+                }
+            }
+        }
+        return LayoutTemplate(
+            id = "generated_mosaic_$count",
+            name = "Mosaic $count",
+            cells = cells,
+            defaultSpacingDp = if (count >= 10) 4f else 6f,
+            defaultCornerRadiusDp = if (count >= 10) 9f else 12f,
+            aspectRatio = if (count <= 6) 1f else 4f / 5f,
+            metadata = TemplateMetadata(
+                category = TemplateCategory.Mosaic,
+                previewAsset = "generated/mosaic/$count",
+                supportedOrientations = setOf(TemplateOrientation.Square, TemplateOrientation.Portrait),
+            ),
+        )
+    }
+
+    private fun heroLeftCells(count: Int): List<LayoutCell> {
+        val remaining = count - 1
+        val supportColumns = if (remaining <= 4) 1 else 2
+        return listOf(LayoutCell(NormalizedRect(0f, 0f, 0.62f, 1f), 0)) +
+            adaptiveGridCells(count = remaining, columns = supportColumns).map { cell ->
+                LayoutCell(
+                    rect = NormalizedRect(
+                        x = 0.62f + cell.rect.x * 0.38f,
+                        y = cell.rect.y,
+                        width = cell.rect.width * 0.38f,
+                        height = cell.rect.height,
+                    ),
+                    index = cell.index + 1,
+                )
+            }
+    }
+
+    private fun heroTopCells(count: Int): List<LayoutCell> {
+        val remaining = count - 1
+        val supportColumns = if (remaining <= 3) remaining else 3
+        return listOf(LayoutCell(NormalizedRect(0f, 0f, 1f, 0.58f), 0)) +
+            adaptiveGridCells(count = remaining, columns = supportColumns.coerceAtLeast(1)).map { cell ->
+                LayoutCell(
+                    rect = NormalizedRect(
+                        x = cell.rect.x,
+                        y = 0.58f + cell.rect.y * 0.42f,
+                        width = cell.rect.width,
+                        height = cell.rect.height * 0.42f,
+                    ),
+                    index = cell.index + 1,
+                )
+            }
+    }
+
+    private fun TemplateOrientation.aspectRatio(): Float =
+        when (this) {
+            TemplateOrientation.Square -> 1f
+            TemplateOrientation.Portrait -> 4f / 5f
+            TemplateOrientation.Landscape -> 5f / 4f
         }
 }
