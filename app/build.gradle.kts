@@ -38,24 +38,7 @@ android {
     buildFeatures {
         compose = true
     }
-    androidResources {
-        noCompress += "tflite"
-    }
 }
-
-val tfliteApiAar by configurations.creating {
-    isCanBeConsumed = false
-    isCanBeResolved = true
-}
-val tfliteApiAarFiles = tfliteApiAar.incoming.artifactView { }.files
-val extractedTfliteApiJar = layout.buildDirectory.file("generated/tfliteApi/tensorflow-lite-api-classes.jar")
-val extractTfliteApiClasses by tasks.registering(Copy::class) {
-    from(tfliteApiAarFiles.elements.map { elements -> elements.map { zipTree(it.asFile) } })
-    include("classes.jar")
-    rename("classes.jar", extractedTfliteApiJar.get().asFile.name)
-    into(extractedTfliteApiJar.map { it.asFile.parentFile })
-}
-val tfliteApiClasses = files(extractedTfliteApiJar).builtBy(extractTfliteApiClasses)
 
 dependencies {
     implementation(libs.androidx.core.ktx)
@@ -75,14 +58,6 @@ dependencies {
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)
     implementation(libs.coil.compose)
-    add("tfliteApiAar", "org.tensorflow:tensorflow-lite-api:${libs.versions.tflite.get()}") {
-        isTransitive = false
-    }
-    implementation(tfliteApiClasses)
-    implementation(libs.tensorflow.lite) {
-        exclude(group = "org.tensorflow", module = "tensorflow-lite-api")
-    }
-    compileOnly(libs.tensorflow.lite.support)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.play.services.ads)
     implementation(libs.androidx.exifinterface)

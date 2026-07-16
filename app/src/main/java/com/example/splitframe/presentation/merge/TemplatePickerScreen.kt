@@ -20,7 +20,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material3.Card
@@ -98,7 +98,7 @@ fun TemplatePickerScreen(
                 actions = {
                     IconButton(onClick = onOpenSingleImageTool) {
                         Icon(
-                            imageVector = Icons.Default.AutoFixHigh,
+                            imageVector = Icons.Default.AddPhotoAlternate,
                             contentDescription = stringResource(R.string.single_image_tool),
                         )
                     }

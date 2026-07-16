@@ -14,8 +14,6 @@ sealed interface MergeIntent {
     data class AssignImages(val sources: List<ImageSource>) : MergeIntent
     data class RemoveImage(val cellIndex: Int) : MergeIntent
     data class ReplaceImage(val cellIndex: Int, val source: ImageSource) : MergeIntent
-    data class EnhanceImage(val cellIndex: Int) : MergeIntent
-    data class ResetEnhancement(val cellIndex: Int) : MergeIntent
     data class ReorderImages(val fromIndex: Int, val toIndex: Int) : MergeIntent
     data class SwapCells(val a: Int, val b: Int) : MergeIntent
     data class UpdateImageTransform(
@@ -44,8 +42,6 @@ sealed interface MergeAction {
     data class AssignImages(val sources: List<ImageSource>) : MergeAction
     data class RemoveImage(val cellIndex: Int) : MergeAction
     data class ReplaceImage(val cellIndex: Int, val source: ImageSource) : MergeAction
-    data class EnhanceImage(val cellIndex: Int) : MergeAction
-    data class ResetEnhancement(val cellIndex: Int) : MergeAction
     data class ReorderImages(val fromIndex: Int, val toIndex: Int) : MergeAction
     data class SwapCells(val a: Int, val b: Int) : MergeAction
     data class UpdateImageTransform(
@@ -71,16 +67,9 @@ sealed interface MergeAction {
 sealed interface MergeResultEvent {
     data class ProjectChanged(val project: MergeProject) : MergeResultEvent
     data class ImageDimensionsLoaded(val cellIndex: Int, val dimensions: ImageDimensions) : MergeResultEvent
-    data class EnhancementStarted(val cellIndex: Int) : MergeResultEvent
-    data class EnhancementFinished(
-        val cellIndex: Int,
-        val source: ImageSource.Enhanced,
-        val dimensions: ImageDimensions?,
-    ) : MergeResultEvent
     data class ExportStarted(val progress: Float = 0f) : MergeResultEvent
     data class ExportFinished(val result: ExportResult) : MergeResultEvent
     data class Failed(val messageRes: Int) : MergeResultEvent
-    data object EnhancementStopped : MergeResultEvent
     data object ErrorCleared : MergeResultEvent
     data object ExportResultDismissed : MergeResultEvent
 }
@@ -91,8 +80,6 @@ data class MergeState(
     val sourceDimensions: Map<Int, ImageDimensions> = emptyMap(),
     val isExporting: Boolean = false,
     val exportProgress: Float = 0f,
-    val isEnhancing: Boolean = false,
-    val enhancingCellIndex: Int? = null,
     val exportResult: ExportResult? = null,
     val error: Int? = null,
     val canUndo: Boolean = false,

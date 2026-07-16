@@ -3,7 +3,6 @@ package com.example.splitframe.presentation.single
 import com.example.splitframe.domain.ImageSource
 import com.example.splitframe.domain.SingleImageOutputFormat
 import com.example.splitframe.domain.SingleImagePlanResult
-import com.example.splitframe.domain.SingleImageQualityMode
 import com.example.splitframe.domain.SingleImageResizePreset
 import com.example.splitframe.domain.SingleImageResizeRequest
 import com.example.splitframe.export.SingleImageProcessResult
@@ -21,7 +20,6 @@ data class SingleImageState(
 sealed interface SingleImageIntent {
     data class SelectImage(val source: ImageSource.LocalUri) : SingleImageIntent
     data class SelectPreset(val preset: SingleImageResizePreset) : SingleImageIntent
-    data class SelectQualityMode(val mode: SingleImageQualityMode) : SingleImageIntent
     data class SelectOutputFormat(val format: SingleImageOutputFormat) : SingleImageIntent
     data class UpdateJpegQuality(val quality: Int) : SingleImageIntent
     data class UpdateCustomWidth(val widthPx: Int?) : SingleImageIntent

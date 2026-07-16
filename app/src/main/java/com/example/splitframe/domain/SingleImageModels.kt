@@ -2,11 +2,6 @@ package com.example.splitframe.domain
 
 import kotlin.math.roundToInt
 
-enum class SingleImageQualityMode {
-    Standard,
-    Enhanced,
-}
-
 enum class SingleImageResizePreset {
     LongEdge1080,
     LongEdge2K,
@@ -28,7 +23,6 @@ enum class SingleImageOutputFormat(
 
 data class SingleImageResizeRequest(
     val preset: SingleImageResizePreset = SingleImageResizePreset.Scale2x,
-    val qualityMode: SingleImageQualityMode = SingleImageQualityMode.Standard,
     val outputFormat: SingleImageOutputFormat = SingleImageOutputFormat.Jpeg,
     val jpegQuality: Int = 94,
     val customWidthPx: Int? = null,

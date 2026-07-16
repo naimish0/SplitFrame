@@ -40,10 +40,7 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -83,7 +80,6 @@ import com.example.splitframe.domain.ImageSource
 import com.example.splitframe.domain.ImageTransform
 import com.example.splitframe.domain.TemplateKind
 import com.example.splitframe.presentation.coilModel
-import com.example.splitframe.presentation.originalCoilModel
 import com.example.splitframe.presentation.titleText
 import com.example.splitframe.ui.components.PrimaryActionButton
 import com.example.splitframe.ui.components.SecondaryActionButton
@@ -108,7 +104,6 @@ fun EditorScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var selectedCell by rememberSaveable(project.template.id) { mutableIntStateOf(0) }
     var showExportSheet by rememberSaveable { mutableStateOf(false) }
-    var showOriginalPreview by rememberSaveable { mutableStateOf(false) }
     var showResetConfirm by rememberSaveable { mutableStateOf(false) }
     var isPickerOpen by rememberSaveable { mutableStateOf(false) }
     val selectionLimitReached = project.assignedImages.size >= CollageLimits.MaxImages
@@ -120,7 +115,6 @@ fun EditorScreen(
         if (uri != null) {
             context.persistUriAccessIfSupported(uri)
             onIntent(MergeIntent.AssignImage(selectedCell, ImageSource.LocalUri(uri.toString())))
-            showOriginalPreview = false
         }
     }
     val multiPicker = rememberLauncherForActivityResult(
@@ -130,7 +124,6 @@ fun EditorScreen(
         if (uris.isNotEmpty()) {
             uris.forEach(context::persistUriAccessIfSupported)
             onIntent(MergeIntent.AssignImages(uris.map { ImageSource.LocalUri(it.toString()) }))
-            showOriginalPreview = false
         }
     }
 
@@ -170,13 +163,13 @@ fun EditorScreen(
                 actions = {
                     IconButton(
                         onClick = { onIntent(MergeIntent.UndoEdit) },
-                        enabled = state.canUndo && !state.isExporting && !state.isEnhancing,
+                        enabled = state.canUndo && !state.isExporting,
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.undo))
                     }
                     IconButton(
                         onClick = { onIntent(MergeIntent.RedoEdit) },
-                        enabled = state.canRedo && !state.isExporting && !state.isEnhancing,
+                        enabled = state.canRedo && !state.isExporting,
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = stringResource(R.string.redo))
                     }
@@ -184,7 +177,7 @@ fun EditorScreen(
                         onClick = {
                             if (project.hasEdits()) showResetConfirm = true else onIntent(MergeIntent.Reset)
                         },
-                        enabled = !state.isExporting && !state.isEnhancing,
+                        enabled = !state.isExporting,
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.reset))
                     }
@@ -216,7 +209,6 @@ fun EditorScreen(
                         EditorCanvasSection(
                             state = state,
                             selectedCell = selectedCell,
-                            showOriginalPreview = showOriginalPreview,
                             onAddPhotos = ::launchMultiPicker,
                             onCellSelected = { cell ->
                                 selectedCell = cell
@@ -237,11 +229,9 @@ fun EditorScreen(
 	                                onCellSelected = { selectedCell = it },
 	                                onReorder = { from, to -> onIntent(MergeIntent.ReorderImages(from, to)) },
 	                            )
-	                            SelectedCellPanel(
-	                                state = state,
+                            SelectedCellPanel(
+                                state = state,
                                 selectedCell = selectedCell,
-                                showOriginalPreview = showOriginalPreview,
-                                onShowOriginalChanged = { showOriginalPreview = it },
                                 onPickPhoto = ::launchSinglePicker,
                                 onAddPhotos = ::launchMultiPicker,
                                 onIntent = onIntent,
@@ -259,7 +249,6 @@ fun EditorScreen(
                         EditorCanvasSection(
                             state = state,
                             selectedCell = selectedCell,
-                            showOriginalPreview = showOriginalPreview,
                             onAddPhotos = ::launchMultiPicker,
                             onCellSelected = { cell ->
                                 selectedCell = cell
@@ -278,8 +267,6 @@ fun EditorScreen(
                         SelectedCellPanel(
                             state = state,
                             selectedCell = selectedCell,
-                            showOriginalPreview = showOriginalPreview,
-                            onShowOriginalChanged = { showOriginalPreview = it },
                             onPickPhoto = ::launchSinglePicker,
                             onAddPhotos = ::launchMultiPicker,
                             onIntent = onIntent,
@@ -335,7 +322,6 @@ fun EditorScreen(
 private fun EditorCanvasSection(
     state: MergeState,
     selectedCell: Int,
-    showOriginalPreview: Boolean,
     onAddPhotos: () -> Unit,
     onCellSelected: (Int) -> Unit,
     onImageTransformChanged: (Int, ImageTransform, Boolean) -> Unit,
@@ -372,7 +358,7 @@ private fun EditorCanvasSection(
                 SecondaryActionButton(
                     text = stringResource(R.string.add_photos),
                     onClick = onAddPhotos,
-                    enabled = !selectionLimitReached && !state.isExporting && !state.isEnhancing,
+                    enabled = !selectionLimitReached && !state.isExporting,
                     icon = Icons.Default.AddPhotoAlternate,
                 )
             }
@@ -388,11 +374,6 @@ private fun EditorCanvasSection(
                     .fillMaxWidth()
                     .aspectRatio(project.template.aspectRatio),
                 sourceDimensions = state.sourceDimensions,
-                previewOverrides = selectedPreviewOverride(
-                    project = project,
-                    selectedCell = selectedCell,
-                    showOriginalPreview = showOriginalPreview,
-                ),
                 selectedCellIndex = selectedCell,
                 onCellTap = onCellSelected,
                 onImageTransformChanged = onImageTransformChanged,
@@ -491,8 +472,6 @@ private fun ThumbnailStrip(
 private fun SelectedCellPanel(
     state: MergeState,
     selectedCell: Int,
-    showOriginalPreview: Boolean,
-    onShowOriginalChanged: (Boolean) -> Unit,
     onPickPhoto: () -> Unit,
     onAddPhotos: () -> Unit,
     onIntent: (MergeIntent) -> Unit,
@@ -504,7 +483,6 @@ private fun SelectedCellPanel(
     var showRemoveConfirm by rememberSaveable(selectedCell) { mutableStateOf(false) }
     SplitFrameSection(
         title = stringResource(R.string.cell_number, selectedCell + 1),
-        supportingText = stringResource(R.string.enhance_explanation),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -519,14 +497,14 @@ private fun SelectedCellPanel(
                     SecondaryActionButton(
                         text = stringResource(R.string.remove_photo),
                         onClick = {
-                            if (transform != ImageTransform.Default || source is ImageSource.Enhanced) {
+                            if (transform != ImageTransform.Default) {
                                 showRemoveConfirm = true
                             } else {
                                 onIntent(MergeIntent.RemoveImage(selectedCell))
                             }
                         },
                         modifier = Modifier.weight(1f),
-                        enabled = !state.isExporting && !state.isEnhancing,
+                        enabled = !state.isExporting,
                         icon = Icons.Default.Delete,
                     )
                 }
@@ -534,7 +512,7 @@ private fun SelectedCellPanel(
             SecondaryActionButton(
                 text = stringResource(R.string.add_multiple_photos),
                 onClick = onAddPhotos,
-                enabled = !selectionLimitReached && !state.isExporting && !state.isEnhancing,
+                enabled = !selectionLimitReached && !state.isExporting,
                 icon = Icons.Default.AddPhotoAlternate,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -568,62 +546,6 @@ private fun SelectedCellPanel(
                     modifier = Modifier.fillMaxWidth(),
                     icon = Icons.Default.Refresh,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AsyncImage(
-                        model = if (showOriginalPreview) source.originalCoilModel() else source.coilModel(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(92.dp)
-                            .clip(MaterialTheme.shapes.small)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                    )
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        if (source is ImageSource.Enhanced) {
-                            StatusMessage(
-                                text = stringResource(R.string.enhanced_ready),
-                                tone = StatusTone.Success,
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FilterChip(
-                                    selected = showOriginalPreview,
-                                    onClick = { onShowOriginalChanged(true) },
-                                    label = { Text(stringResource(R.string.before)) },
-                                )
-                                FilterChip(
-                                    selected = !showOriginalPreview,
-                                    onClick = { onShowOriginalChanged(false) },
-                                    label = { Text(stringResource(R.string.after)) },
-                                )
-                            }
-                        }
-                        Button(
-                            onClick = { onIntent(MergeIntent.EnhanceImage(selectedCell)) },
-                            enabled = !state.isEnhancing,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondary,
-                                contentColor = MaterialTheme.colorScheme.onSecondary,
-                            ),
-                        ) {
-                            if (state.isEnhancing && state.enhancingCellIndex == selectedCell) {
-                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                Spacer(Modifier.width(8.dp))
-                                Text(stringResource(R.string.enhancing))
-                            } else {
-                                Text(stringResource(R.string.enhance_quality))
-                            }
-                        }
-                        if (source is ImageSource.Enhanced) {
-                            SecondaryActionButton(
-                                text = stringResource(R.string.reset_enhancement),
-                                onClick = { onIntent(MergeIntent.ResetEnhancement(selectedCell)) },
-                            )
-                        }
-                    }
-                }
             }
         }
     }
@@ -667,7 +589,7 @@ private fun EditorTools(
             SecondaryActionButton(
                 text = stringResource(R.string.auto_arrange),
                 onClick = { onIntent(MergeIntent.AutoArrange) },
-                enabled = project.assignedImages.isNotEmpty() && !state.isExporting && !state.isEnhancing,
+                enabled = project.assignedImages.isNotEmpty() && !state.isExporting,
                 modifier = Modifier.fillMaxWidth(),
             )
             LabeledSlider(
@@ -778,19 +700,6 @@ private fun com.example.splitframe.domain.MergeProject.hasEdits(): Boolean =
         cornerRadiusDp != template.defaultCornerRadiusDp ||
         beforeAfterSlider != 0.5f ||
         backgroundColor != 0xFFFFFFFFuL
-
-private fun selectedPreviewOverride(
-    project: com.example.splitframe.domain.MergeProject,
-    selectedCell: Int,
-    showOriginalPreview: Boolean,
-): Map<Int, Any> {
-    val source = project.assignedImages[selectedCell]
-    return if (showOriginalPreview && source is ImageSource.Enhanced) {
-        mapOf(selectedCell to source.originalCoilModel())
-    } else {
-        emptyMap()
-    }
-}
 
 private fun android.content.Context.persistUriAccessIfSupported(uri: Uri) {
     try {

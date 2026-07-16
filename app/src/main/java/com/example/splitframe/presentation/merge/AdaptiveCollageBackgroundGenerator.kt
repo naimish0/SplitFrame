@@ -51,7 +51,6 @@ internal class AdaptiveCollageBackgroundGenerator(
 
     private fun ImageSource.gradientCacheKey(): String =
         when (this) {
-            is ImageSource.Enhanced -> originalUri
             is ImageSource.LocalUri -> uri
         }
 

@@ -17,7 +17,6 @@ import com.example.splitframe.domain.TemplateRepository
 import com.example.splitframe.export.ImageExportRepository
 import com.example.splitframe.export.ImageSourceReader
 import com.example.splitframe.export.ImageValidationResult
-import com.example.splitframe.ml.SuperResolutionProcessor
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,7 +32,6 @@ class MergeViewModel(
     private val projectStore: ProjectStore,
     private val imageSourceReader: ImageSourceReader,
     private val imageExportRepository: ImageExportRepository,
-    private val superResolutionProcessor: SuperResolutionProcessor,
 ) : ViewModel() {
     private val templates = templateRepository.templates()
     private val undoStack = ArrayDeque<ProjectSnapshot>()
@@ -69,8 +67,6 @@ class MergeViewModel(
             is MergeAction.AssignImages -> assignImages(action.sources)
             is MergeAction.RemoveImage -> removeImage(action.cellIndex)
             is MergeAction.ReplaceImage -> assignImage(action.cellIndex, action.source)
-            is MergeAction.EnhanceImage -> enhanceImage(action.cellIndex)
-            is MergeAction.ResetEnhancement -> resetEnhancement(action.cellIndex)
             is MergeAction.ReorderImages -> reorderImages(action.fromIndex, action.toIndex)
             is MergeAction.SwapCells -> swapCells(action.a, action.b)
             is MergeAction.UpdateImageTransform -> updateImageTransform(action.cellIndex, action.transform, action.trackUndo)
@@ -217,54 +213,6 @@ class MergeViewModel(
         sources.add(boundedTo, moved)
         val updated = projectWithOrderedSources(project, sources, project.transformsBySourceKey())
         commitProjectChange(updated, remapDimensions(updated, project.dimensionsBySourceKey(_state.value.sourceDimensions)))
-    }
-
-    private fun enhanceImage(cellIndex: Int) {
-        if (_state.value.isEnhancing) return
-        val source = _state.value.project?.assignedImages?.get(cellIndex)
-        if (source == null) {
-            reduce(MergeResultEvent.Failed(R.string.no_photo_selected))
-            return
-        }
-        viewModelScope.launch {
-            reduce(MergeResultEvent.EnhancementStarted(cellIndex))
-            val enhanced = withContext(Dispatchers.Default) {
-                superResolutionProcessor.enhance(source)
-            }
-            if (enhanced == null) {
-                reduce(MergeResultEvent.EnhancementStopped)
-                reduce(MergeResultEvent.Failed(R.string.enhance_failed))
-                return@launch
-            }
-            val dimensions = try {
-                withContext(Dispatchers.IO) {
-                    imageSourceReader.dimensions(enhanced)
-                }
-            } catch (_: Throwable) {
-                null
-            }
-            reduce(MergeResultEvent.EnhancementFinished(cellIndex, enhanced, dimensions))
-        }
-    }
-
-    private fun resetEnhancement(cellIndex: Int) {
-        val enhanced = _state.value.project?.assignedImages?.get(cellIndex) as? ImageSource.Enhanced ?: return
-        val original = ImageSource.LocalUri(enhanced.originalUri)
-        viewModelScope.launch {
-            when (val validation = withContext(Dispatchers.IO) { imageSourceReader.validate(original) }) {
-                is ImageValidationResult.Valid -> {
-                    val project = _state.value.project ?: return@launch
-                    commitProjectChange(
-                        project = project.copy(
-                            assignedImages = project.assignedImages + (cellIndex to original),
-                        ),
-                        sourceDimensions = _state.value.sourceDimensions + (cellIndex to validation.dimensions),
-                    )
-                }
-                ImageValidationResult.UnsupportedFormat -> reduce(MergeResultEvent.Failed(R.string.image_unsupported_format))
-                ImageValidationResult.Unreadable -> reduce(MergeResultEvent.Failed(R.string.image_unreadable))
-            }
-        }
     }
 
     private fun swapCells(a: Int, b: Int) {
@@ -549,31 +497,6 @@ class MergeViewModel(
                 is MergeResultEvent.ImageDimensionsLoaded -> state.copy(
                     sourceDimensions = state.sourceDimensions + (result.cellIndex to result.dimensions),
                 )
-                is MergeResultEvent.EnhancementStarted -> state.copy(
-                    isEnhancing = true,
-                    enhancingCellIndex = result.cellIndex,
-                    error = null,
-                )
-                is MergeResultEvent.EnhancementFinished -> {
-                    val project = state.project
-                    state.copy(
-                        project = project?.copy(
-                            assignedImages = project.assignedImages + (result.cellIndex to result.source),
-                        ),
-                        sourceDimensions = if (result.dimensions != null) {
-                            state.sourceDimensions + (result.cellIndex to result.dimensions)
-                        } else {
-                            state.sourceDimensions
-                        },
-                        isEnhancing = false,
-                        enhancingCellIndex = null,
-                        error = null,
-                    )
-                }
-                MergeResultEvent.EnhancementStopped -> state.copy(
-                    isEnhancing = false,
-                    enhancingCellIndex = null,
-                )
                 is MergeResultEvent.ExportStarted -> state.copy(
                     isExporting = true,
                     exportProgress = result.progress,
@@ -600,8 +523,6 @@ class MergeViewModel(
             is MergeIntent.AssignImages -> MergeAction.AssignImages(sources)
             is MergeIntent.RemoveImage -> MergeAction.RemoveImage(cellIndex)
             is MergeIntent.ReplaceImage -> MergeAction.ReplaceImage(cellIndex, source)
-            is MergeIntent.EnhanceImage -> MergeAction.EnhanceImage(cellIndex)
-            is MergeIntent.ResetEnhancement -> MergeAction.ResetEnhancement(cellIndex)
             is MergeIntent.ReorderImages -> MergeAction.ReorderImages(fromIndex, toIndex)
             is MergeIntent.SwapCells -> MergeAction.SwapCells(a, b)
             is MergeIntent.UpdateImageTransform -> MergeAction.UpdateImageTransform(cellIndex, transform, trackUndo)
@@ -658,7 +579,6 @@ class MergeViewModel(
 
     private fun ImageSource.sourceKey(): String =
         when (this) {
-            is ImageSource.Enhanced -> originalUri
             is ImageSource.LocalUri -> uri
         }
 
