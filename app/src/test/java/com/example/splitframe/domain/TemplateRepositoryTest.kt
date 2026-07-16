@@ -14,7 +14,7 @@ class TemplateRepositoryTest {
 
     @Test
     fun productionTemplateCatalogHasExpandedChoices() {
-        assertTrue(templates.size >= 29)
+        assertTrue(templates.size >= 35)
     }
 
     @Test
@@ -31,7 +31,7 @@ class TemplateRepositoryTest {
 
     @Test
     fun templatesCoverEverySupportedPhotoCount() {
-        (2..9).forEach { count ->
+        (2..CollageLimits.MaxImages).forEach { count ->
             assertTrue("Missing template for $count photos", templates.any { it.cells.size == count })
         }
     }

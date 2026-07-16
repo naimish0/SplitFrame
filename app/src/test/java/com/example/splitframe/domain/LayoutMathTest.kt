@@ -1,6 +1,7 @@
 package com.example.splitframe.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LayoutMathTest {
@@ -78,6 +79,57 @@ class LayoutMathTest {
         assertEquals(160f, crop.top, 0.001f)
         assertEquals(40f, crop.right, 0.001f)
         assertEquals(200f, crop.bottom, 0.001f)
+    }
+
+    @Test
+    fun gesturePanMapsToBoundedSourceCrop() {
+        val transform = LayoutMath.transformAfterGesture(
+            sourceDimensions = ImageDimensions(widthPx = 400, heightPx = 200),
+            destinationWidthPx = 100f,
+            destinationHeightPx = 100f,
+            current = ImageTransform(zoom = 2f),
+            panXpx = 40f,
+            panYpx = -40f,
+            zoomChange = 1f,
+        )
+
+        val crop = LayoutMath.cropToFillSourceRect(
+            sourceWidthPx = 400f,
+            sourceHeightPx = 200f,
+            destinationWidthPx = 100f,
+            destinationHeightPx = 100f,
+            transform = transform,
+        )
+
+        assertTrue(crop.left >= 0f)
+        assertTrue(crop.top >= 0f)
+        assertTrue(crop.right <= 400f)
+        assertTrue(crop.bottom <= 200f)
+    }
+
+    @Test
+    fun doubleTapZoomsInThenResetsWhenAlreadyZoomed() {
+        val zoomed = LayoutMath.transformAfterDoubleTap(
+            sourceDimensions = ImageDimensions(widthPx = 400, heightPx = 200),
+            destinationWidthPx = 100f,
+            destinationHeightPx = 100f,
+            current = ImageTransform.Default,
+            tapXInFramePx = 75f,
+            tapYInFramePx = 50f,
+        )
+
+        assertEquals(2.2f, zoomed.zoom, 0.001f)
+
+        val reset = LayoutMath.transformAfterDoubleTap(
+            sourceDimensions = ImageDimensions(widthPx = 400, heightPx = 200),
+            destinationWidthPx = 100f,
+            destinationHeightPx = 100f,
+            current = zoomed,
+            tapXInFramePx = 75f,
+            tapYInFramePx = 50f,
+        )
+
+        assertEquals(ImageTransform.Default, reset)
     }
 
     @Test

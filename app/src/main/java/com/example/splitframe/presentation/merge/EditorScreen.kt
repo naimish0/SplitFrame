@@ -78,6 +78,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.splitframe.R
+import com.example.splitframe.domain.CollageLimits
 import com.example.splitframe.domain.ImageSource
 import com.example.splitframe.domain.ImageTransform
 import com.example.splitframe.domain.TemplateKind
@@ -110,6 +111,7 @@ fun EditorScreen(
     var showOriginalPreview by rememberSaveable { mutableStateOf(false) }
     var showResetConfirm by rememberSaveable { mutableStateOf(false) }
     var isPickerOpen by rememberSaveable { mutableStateOf(false) }
+    val selectionLimitReached = project.assignedImages.size >= CollageLimits.MaxImages
 
     val singlePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -122,7 +124,7 @@ fun EditorScreen(
         }
     }
     val multiPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 9),
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = CollageLimits.MaxImages),
     ) { uris: List<Uri> ->
         isPickerOpen = false
         if (uris.isNotEmpty()) {
@@ -134,19 +136,22 @@ fun EditorScreen(
 
     fun launchSinglePicker() {
         if (isPickerOpen) return
+        if (selectionLimitReached && project.assignedImages[selectedCell] == null) return
         isPickerOpen = true
         singlePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
 
     fun launchMultiPicker() {
         if (isPickerOpen) return
+        if (selectionLimitReached) return
         isPickerOpen = true
         multiPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
 
     val errorMessage = state.error?.let { stringResource(it) }
-    LaunchedEffect(errorMessage) {
+    LaunchedEffect(errorMessage, showExportSheet) {
         val message = errorMessage ?: return@LaunchedEffect
+        if (showExportSheet) return@LaunchedEffect
         snackbarHostState.showSnackbar(message)
         onIntent(MergeIntent.ClearError)
     }
@@ -215,10 +220,10 @@ fun EditorScreen(
                             onAddPhotos = ::launchMultiPicker,
                             onCellSelected = { cell ->
                                 selectedCell = cell
-                                if (project.assignedImages[cell] == null) launchSinglePicker()
+                                if (project.assignedImages[cell] == null && !selectionLimitReached) launchSinglePicker()
                             },
-                            onImageTransformChanged = { cell, transform ->
-                                onIntent(MergeIntent.UpdateImageTransform(cell, transform))
+                            onImageTransformChanged = { cell, transform, trackUndo ->
+                                onIntent(MergeIntent.UpdateImageTransform(cell, transform, trackUndo))
                             },
                             modifier = Modifier.weight(1.25f),
                         )
@@ -258,10 +263,10 @@ fun EditorScreen(
                             onAddPhotos = ::launchMultiPicker,
                             onCellSelected = { cell ->
                                 selectedCell = cell
-                                if (project.assignedImages[cell] == null) launchSinglePicker()
+                                if (project.assignedImages[cell] == null && !selectionLimitReached) launchSinglePicker()
                             },
-                            onImageTransformChanged = { cell, transform ->
-                                onIntent(MergeIntent.UpdateImageTransform(cell, transform))
+                            onImageTransformChanged = { cell, transform, trackUndo ->
+                                onIntent(MergeIntent.UpdateImageTransform(cell, transform, trackUndo))
                             },
                         )
                         ThumbnailStrip(
@@ -333,11 +338,12 @@ private fun EditorCanvasSection(
     showOriginalPreview: Boolean,
     onAddPhotos: () -> Unit,
     onCellSelected: (Int) -> Unit,
-    onImageTransformChanged: (Int, ImageTransform) -> Unit,
+    onImageTransformChanged: (Int, ImageTransform, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val project = state.project ?: return
     val colors = splitFrameColors()
+    val selectionLimitReached = project.assignedImages.size >= CollageLimits.MaxImages
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = colors.editorCanvas,
@@ -359,15 +365,21 @@ private fun EditorCanvasSection(
                     color = colors.selectedCell,
                 )
                 Text(
-                    text = stringResource(R.string.photo_count, project.assignedImages.size, 9),
+                    text = stringResource(R.string.photo_count, project.assignedImages.size, CollageLimits.MaxImages),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 SecondaryActionButton(
                     text = stringResource(R.string.add_photos),
                     onClick = onAddPhotos,
-                    enabled = !state.isExporting && !state.isEnhancing,
+                    enabled = !selectionLimitReached && !state.isExporting && !state.isEnhancing,
                     icon = Icons.Default.AddPhotoAlternate,
+                )
+            }
+            if (selectionLimitReached) {
+                StatusMessage(
+                    text = stringResource(R.string.photo_limit_reached),
+                    tone = StatusTone.Info,
                 )
             }
             MergePreviewCanvas(
@@ -403,7 +415,7 @@ private fun ThumbnailStrip(
     val dragThresholdPx = with(LocalDensity.current) { 42.dp.toPx() }
     SplitFrameSection(
         title = stringResource(R.string.thumbnail_strip),
-        supportingText = stringResource(R.string.photo_count, project.assignedImages.size, 9),
+        supportingText = stringResource(R.string.photo_count, project.assignedImages.size, CollageLimits.MaxImages),
     ) {
         Row(
             modifier = Modifier
@@ -488,6 +500,7 @@ private fun SelectedCellPanel(
     val project = state.project ?: return
     val source = project.assignedImages[selectedCell]
     val transform = project.imageTransforms[selectedCell] ?: ImageTransform.Default
+    val selectionLimitReached = project.assignedImages.size >= CollageLimits.MaxImages
     var showRemoveConfirm by rememberSaveable(selectedCell) { mutableStateOf(false) }
     SplitFrameSection(
         title = stringResource(R.string.cell_number, selectedCell + 1),
@@ -499,7 +512,7 @@ private fun SelectedCellPanel(
                     text = stringResource(if (source == null) R.string.select_photo else R.string.replace_photo),
                     onClick = onPickPhoto,
                     modifier = Modifier.weight(1f),
-                    enabled = !state.isExporting,
+                    enabled = !state.isExporting && (source != null || !selectionLimitReached),
                     icon = Icons.Default.AddPhotoAlternate,
                 )
                 if (source != null) {
@@ -521,10 +534,16 @@ private fun SelectedCellPanel(
             SecondaryActionButton(
                 text = stringResource(R.string.add_multiple_photos),
                 onClick = onAddPhotos,
-                enabled = !state.isExporting && !state.isEnhancing,
+                enabled = !selectionLimitReached && !state.isExporting && !state.isEnhancing,
                 icon = Icons.Default.AddPhotoAlternate,
                 modifier = Modifier.fillMaxWidth(),
             )
+            if (selectionLimitReached) {
+                StatusMessage(
+                    text = stringResource(R.string.photo_limit_reached),
+                    tone = StatusTone.Info,
+                )
+            }
 
             if (source != null) {
                 StatusMessage(

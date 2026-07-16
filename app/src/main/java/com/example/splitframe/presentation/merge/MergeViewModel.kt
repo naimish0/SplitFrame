@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.splitframe.R
 import com.example.splitframe.data.ProjectStore
+import com.example.splitframe.domain.CollageGradient
+import com.example.splitframe.domain.CollageLimits
 import com.example.splitframe.domain.ExportResolution
 import com.example.splitframe.domain.ExportResult
 import com.example.splitframe.domain.ImageSource
@@ -17,6 +19,7 @@ import com.example.splitframe.export.ImageValidationResult
 import com.example.splitframe.ml.SuperResolutionProcessor
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +37,9 @@ class MergeViewModel(
     private val templates = templateRepository.templates()
     private val undoStack = ArrayDeque<ProjectSnapshot>()
     private val redoStack = ArrayDeque<ProjectSnapshot>()
+    private val adaptiveBackgroundGenerator = AdaptiveCollageBackgroundGenerator(imageSourceReader)
+    private var backgroundGeneration = 0
+    private var exportJob: Job? = null
     private val _state = MutableStateFlow(
         MergeState(
             availableTemplates = templates,
@@ -66,11 +72,16 @@ class MergeViewModel(
             is MergeAction.ResetEnhancement -> resetEnhancement(action.cellIndex)
             is MergeAction.ReorderImages -> reorderImages(action.fromIndex, action.toIndex)
             is MergeAction.SwapCells -> swapCells(action.a, action.b)
-            is MergeAction.UpdateImageTransform -> updateImageTransform(action.cellIndex, action.transform)
-            is MergeAction.ResetImageTransform -> updateImageTransform(action.cellIndex, ImageTransform.Default)
+            is MergeAction.UpdateImageTransform -> updateImageTransform(action.cellIndex, action.transform, action.trackUndo)
+            is MergeAction.ResetImageTransform -> updateImageTransform(action.cellIndex, ImageTransform.Default, trackUndo = true)
             is MergeAction.UpdateSpacing -> updateProject { it.copy(spacingDp = action.dp.coerceIn(0f, 36f)) }
             is MergeAction.UpdateCornerRadius -> updateProject { it.copy(cornerRadiusDp = action.dp.coerceIn(0f, 64f)) }
-            is MergeAction.UpdateBackgroundColor -> updateProject { it.copy(backgroundColor = action.argb) }
+            is MergeAction.UpdateBackgroundColor -> updateProject {
+                it.copy(
+                    backgroundColor = action.argb,
+                    backgroundGradient = CollageGradient.solid(action.argb),
+                )
+            }
             is MergeAction.UpdateBeforeAfterSlider -> updateProject {
                 it.copy(beforeAfterSlider = action.position.coerceIn(0.05f, 0.95f))
             }
@@ -97,6 +108,7 @@ class MergeViewModel(
         val updated = projectWithOrderedSources(
             base = createProject(template, currentProject.exportResolution).copy(
                 backgroundColor = currentProject.backgroundColor,
+                backgroundGradient = currentProject.backgroundGradient,
                 borderColor = currentProject.borderColor,
                 borderWidthDp = currentProject.borderWidthDp,
             ),
@@ -104,6 +116,7 @@ class MergeViewModel(
             transformsByKey = currentProject.transformsBySourceKey(),
         ).copy(
             backgroundColor = currentProject.backgroundColor,
+            backgroundGradient = currentProject.backgroundGradient,
             borderColor = currentProject.borderColor,
             borderWidthDp = currentProject.borderWidthDp,
         )
@@ -113,6 +126,10 @@ class MergeViewModel(
     private fun assignImage(cellIndex: Int, source: ImageSource) {
         val project = _state.value.project ?: return
         if (project.template.cells.none { it.index == cellIndex }) return
+        if (!project.assignedImages.containsKey(cellIndex) && project.assignedImages.size >= CollageLimits.MaxImages) {
+            reduce(MergeResultEvent.Failed(R.string.image_max_count_reached))
+            return
+        }
         viewModelScope.launch {
             when (val validation = withContext(Dispatchers.IO) { imageSourceReader.validate(source) }) {
                 is ImageValidationResult.Valid -> {
@@ -139,7 +156,7 @@ class MergeViewModel(
             val distinctIncomingSources = sources.distinctBy { it.sourceKey() }
             val uniqueSources = distinctIncomingSources.filterNot { it.sourceKey() in existingKeys }
             val duplicateSkipped = distinctIncomingSources.size < sources.size || distinctIncomingSources.any { it.sourceKey() in existingKeys }
-            val remainingSlots = (MaxImages - initialProject.assignedImages.size).coerceAtLeast(0)
+            val remainingSlots = (CollageLimits.MaxImages - initialProject.assignedImages.size).coerceAtLeast(0)
             val cappedSources = uniqueSources.take(remainingSlots)
             val maxSkipped = uniqueSources.size > cappedSources.size
 
@@ -180,12 +197,13 @@ class MergeViewModel(
         commitProjectChange(updated, remapDimensions(updated, dimensionsByKey))
     }
 
-    private fun updateImageTransform(cellIndex: Int, transform: ImageTransform) {
+    private fun updateImageTransform(cellIndex: Int, transform: ImageTransform, trackUndo: Boolean) {
         val project = _state.value.project ?: return
         if (!project.assignedImages.containsKey(cellIndex)) return
-        updateProject { current ->
-            current.copy(imageTransforms = current.imageTransforms + (cellIndex to transform.normalized()))
-        }
+        commitProjectChange(
+            project = project.copy(imageTransforms = project.imageTransforms + (cellIndex to transform.normalized())),
+            trackUndo = trackUndo,
+        )
     }
 
     private fun reorderImages(fromIndex: Int, toIndex: Int) {
@@ -305,28 +323,34 @@ class MergeViewModel(
     }
 
     private fun export() {
-        if (_state.value.isExporting) return
+        if (_state.value.isExporting || exportJob?.isActive == true) return
         val project = _state.value.project ?: return
         val requiredCells = project.template.cells.map { it.index }.toSet()
         if (!project.assignedImages.keys.containsAll(requiredCells)) {
             reduce(MergeResultEvent.Failed(R.string.missing_images))
             return
         }
-        viewModelScope.launch {
-            reduce(MergeResultEvent.ExportStarted())
-            val result = withContext(Dispatchers.IO) {
-                imageExportRepository.export(project)
+        reduce(MergeResultEvent.ExportStarted())
+        exportJob = viewModelScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    imageExportRepository.export(project)
+                }
+                if (result is ExportResult.Success) {
+                    projectStore.addExportHistory(
+                        id = UUID.randomUUID().toString(),
+                        templateId = project.template.id,
+                        savedUri = result.savedUri,
+                        resolution = project.exportResolution,
+                        createdAtMillis = System.currentTimeMillis(),
+                    )
+                }
+                reduce(MergeResultEvent.ExportFinished(result))
+            } catch (throwable: Throwable) {
+                reduce(ExportResult.Failure(throwable.message ?: "Unknown export error.").let(MergeResultEvent::ExportFinished))
+            } finally {
+                exportJob = null
             }
-            if (result is ExportResult.Success) {
-                projectStore.addExportHistory(
-                    id = UUID.randomUUID().toString(),
-                    templateId = project.template.id,
-                    savedUri = result.savedUri,
-                    resolution = project.exportResolution,
-                    createdAtMillis = System.currentTimeMillis(),
-                )
-            }
-            reduce(MergeResultEvent.ExportFinished(result))
         }
     }
 
@@ -388,6 +412,7 @@ class MergeViewModel(
         trackUndo: Boolean = true,
     ) {
         val current = _state.value.project
+        val sourceKeysChanged = current?.orderedSourceKeys() != project.orderedSourceKeys()
         if (trackUndo && current != null && current != project) {
             undoStack.addLast(ProjectSnapshot(current, _state.value.sourceDimensions))
             while (undoStack.size > MaxUndoDepth) undoStack.removeFirst()
@@ -401,6 +426,37 @@ class MergeViewModel(
                 canUndo = undoStack.isNotEmpty(),
                 canRedo = redoStack.isNotEmpty(),
             )
+        }
+        if (sourceKeysChanged) {
+            scheduleAdaptiveBackground(project)
+        }
+    }
+
+    private fun scheduleAdaptiveBackground(project: MergeProject) {
+        val sources = project.orderedSources()
+        val generation = ++backgroundGeneration
+        if (sources.isEmpty()) {
+            _state.update { state ->
+                val current = state.project ?: return@update state
+                if (current.id != project.id) {
+                    state
+                } else {
+                    state.copy(project = current.copy(backgroundGradient = CollageGradient.Neutral))
+                }
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            val gradient = adaptiveBackgroundGenerator.generate(sources)
+            _state.update { state ->
+                val current = state.project ?: return@update state
+                if (generation != backgroundGeneration || current.id != project.id || current.orderedSourceKeys() != project.orderedSourceKeys()) {
+                    state
+                } else {
+                    state.copy(project = current.copy(backgroundGradient = gradient))
+                }
+            }
         }
     }
 
@@ -417,6 +473,9 @@ class MergeViewModel(
                 error = null,
             )
         }
+        if (current.orderedSourceKeys() != previous.project.orderedSourceKeys()) {
+            scheduleAdaptiveBackground(previous.project)
+        }
     }
 
     private fun redoEdit() {
@@ -431,6 +490,9 @@ class MergeViewModel(
                 canRedo = redoStack.isNotEmpty(),
                 error = null,
             )
+        }
+        if (current.orderedSourceKeys() != next.project.orderedSourceKeys()) {
+            scheduleAdaptiveBackground(next.project)
         }
     }
 
@@ -535,7 +597,7 @@ class MergeViewModel(
             is MergeIntent.ResetEnhancement -> MergeAction.ResetEnhancement(cellIndex)
             is MergeIntent.ReorderImages -> MergeAction.ReorderImages(fromIndex, toIndex)
             is MergeIntent.SwapCells -> MergeAction.SwapCells(a, b)
-            is MergeIntent.UpdateImageTransform -> MergeAction.UpdateImageTransform(cellIndex, transform)
+            is MergeIntent.UpdateImageTransform -> MergeAction.UpdateImageTransform(cellIndex, transform, trackUndo)
             is MergeIntent.ResetImageTransform -> MergeAction.ResetImageTransform(cellIndex)
             is MergeIntent.UpdateSpacing -> MergeAction.UpdateSpacing(dp)
             is MergeIntent.UpdateCornerRadius -> MergeAction.UpdateCornerRadius(dp)
@@ -559,6 +621,7 @@ class MergeViewModel(
             spacingDp = template.defaultSpacingDp,
             cornerRadiusDp = template.defaultCornerRadiusDp,
             backgroundColor = 0xFFFFFFFFu,
+            backgroundGradient = CollageGradient.Neutral,
             borderColor = 0x00000000u,
             borderWidthDp = 0f,
             exportResolution = resolution,
@@ -566,6 +629,9 @@ class MergeViewModel(
 
     private fun MergeProject.orderedSources(): List<ImageSource> =
         template.cells.mapNotNull { assignedImages[it.index] }
+
+    private fun MergeProject.orderedSourceKeys(): List<String> =
+        orderedSources().map { it.sourceKey() }
 
     private fun MergeProject.transformsBySourceKey(): Map<String, ImageTransform> =
         template.cells.mapNotNull { cell ->
@@ -595,7 +661,6 @@ class MergeViewModel(
     )
 
     private companion object {
-        const val MaxImages = 9
         const val MaxUndoDepth = 30
     }
 }

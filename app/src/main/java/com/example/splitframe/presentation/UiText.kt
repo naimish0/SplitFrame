@@ -34,6 +34,12 @@ fun LayoutTemplate.titleRes(): Int =
         TemplateIds.ADAPTIVE_GRID_7 -> R.string.template_adaptive_grid_7
         TemplateIds.ADAPTIVE_GRID_8 -> R.string.template_adaptive_grid_8
         TemplateIds.ADAPTIVE_GRID_9 -> R.string.template_adaptive_grid_9
+        TemplateIds.ADAPTIVE_GRID_10 -> R.string.template_adaptive_grid_10
+        TemplateIds.ADAPTIVE_GRID_11 -> R.string.template_adaptive_grid_11
+        TemplateIds.ADAPTIVE_GRID_12 -> R.string.template_adaptive_grid_12
+        TemplateIds.ADAPTIVE_GRID_13 -> R.string.template_adaptive_grid_13
+        TemplateIds.ADAPTIVE_GRID_14 -> R.string.template_adaptive_grid_14
+        TemplateIds.ADAPTIVE_GRID_15 -> R.string.template_adaptive_grid_15
         TemplateIds.BALANCED_MOSAIC_7 -> R.string.template_balanced_mosaic_7
         TemplateIds.BALANCED_MOSAIC_8 -> R.string.template_balanced_mosaic_8
         TemplateIds.BALANCED_MOSAIC_9 -> R.string.template_balanced_mosaic_9
@@ -69,6 +75,12 @@ fun LayoutTemplate.descriptionRes(): Int =
         TemplateIds.ADAPTIVE_GRID_7 -> R.string.template_adaptive_grid_7_desc
         TemplateIds.ADAPTIVE_GRID_8 -> R.string.template_adaptive_grid_8_desc
         TemplateIds.ADAPTIVE_GRID_9 -> R.string.template_adaptive_grid_9_desc
+        TemplateIds.ADAPTIVE_GRID_10 -> R.string.template_adaptive_grid_10_desc
+        TemplateIds.ADAPTIVE_GRID_11 -> R.string.template_adaptive_grid_11_desc
+        TemplateIds.ADAPTIVE_GRID_12 -> R.string.template_adaptive_grid_12_desc
+        TemplateIds.ADAPTIVE_GRID_13 -> R.string.template_adaptive_grid_13_desc
+        TemplateIds.ADAPTIVE_GRID_14 -> R.string.template_adaptive_grid_14_desc
+        TemplateIds.ADAPTIVE_GRID_15 -> R.string.template_adaptive_grid_15_desc
         TemplateIds.BALANCED_MOSAIC_7 -> R.string.template_balanced_mosaic_7_desc
         TemplateIds.BALANCED_MOSAIC_8 -> R.string.template_balanced_mosaic_8_desc
         TemplateIds.BALANCED_MOSAIC_9 -> R.string.template_balanced_mosaic_9_desc

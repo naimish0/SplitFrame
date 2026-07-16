@@ -20,6 +20,10 @@ enum class TemplateKind {
     BeforeAfter,
 }
 
+object CollageLimits {
+    const val MaxImages = 15
+}
+
 data class MergeProject(
     val id: String,
     val template: LayoutTemplate,
@@ -32,7 +36,32 @@ data class MergeProject(
     val borderWidthDp: Float,
     val exportResolution: ExportResolution = ExportResolution.FHD_1080,
     val beforeAfterSlider: Float = 0.5f,
+    val backgroundGradient: CollageGradient = CollageGradient.Neutral,
 )
+
+data class CollageGradient(
+    val startColor: ULong,
+    val centerColor: ULong,
+    val endColor: ULong,
+    val isFallback: Boolean = false,
+) {
+    companion object {
+        val Neutral = CollageGradient(
+            startColor = 0xFFF7FAF9uL,
+            centerColor = 0xFFEAF4F1uL,
+            endColor = 0xFFE7F0EEuL,
+            isFallback = true,
+        )
+
+        fun solid(argb: ULong): CollageGradient =
+            CollageGradient(
+                startColor = argb,
+                centerColor = argb,
+                endColor = argb,
+                isFallback = false,
+            )
+    }
+}
 
 data class ImageTransform(
     val zoom: Float = 1f,

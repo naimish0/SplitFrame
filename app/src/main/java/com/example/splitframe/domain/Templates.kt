@@ -27,6 +27,12 @@ object TemplateIds {
     const val ADAPTIVE_GRID_7 = "adaptive_grid_7"
     const val ADAPTIVE_GRID_8 = "adaptive_grid_8"
     const val ADAPTIVE_GRID_9 = "adaptive_grid_9"
+    const val ADAPTIVE_GRID_10 = "adaptive_grid_10"
+    const val ADAPTIVE_GRID_11 = "adaptive_grid_11"
+    const val ADAPTIVE_GRID_12 = "adaptive_grid_12"
+    const val ADAPTIVE_GRID_13 = "adaptive_grid_13"
+    const val ADAPTIVE_GRID_14 = "adaptive_grid_14"
+    const val ADAPTIVE_GRID_15 = "adaptive_grid_15"
     const val BALANCED_MOSAIC_7 = "balanced_mosaic_7"
     const val BALANCED_MOSAIC_8 = "balanced_mosaic_8"
     const val BALANCED_MOSAIC_9 = "balanced_mosaic_9"
@@ -293,6 +299,54 @@ class TemplateRepository {
             cells = gridCells(columns = 3, rows = 3),
             defaultSpacingDp = 6f,
             defaultCornerRadiusDp = 12f,
+        ),
+        LayoutTemplate(
+            id = TemplateIds.ADAPTIVE_GRID_10,
+            name = TemplateIds.ADAPTIVE_GRID_10,
+            cells = adaptiveGridCells(count = 10, columns = 4),
+            defaultSpacingDp = 5f,
+            defaultCornerRadiusDp = 10f,
+            aspectRatio = 4f / 5f,
+        ),
+        LayoutTemplate(
+            id = TemplateIds.ADAPTIVE_GRID_11,
+            name = TemplateIds.ADAPTIVE_GRID_11,
+            cells = adaptiveGridCells(count = 11, columns = 4),
+            defaultSpacingDp = 5f,
+            defaultCornerRadiusDp = 10f,
+            aspectRatio = 4f / 5f,
+        ),
+        LayoutTemplate(
+            id = TemplateIds.ADAPTIVE_GRID_12,
+            name = TemplateIds.ADAPTIVE_GRID_12,
+            cells = gridCells(columns = 4, rows = 3),
+            defaultSpacingDp = 5f,
+            defaultCornerRadiusDp = 10f,
+            aspectRatio = 5f / 4f,
+        ),
+        LayoutTemplate(
+            id = TemplateIds.ADAPTIVE_GRID_13,
+            name = TemplateIds.ADAPTIVE_GRID_13,
+            cells = adaptiveGridCells(count = 13, columns = 4),
+            defaultSpacingDp = 5f,
+            defaultCornerRadiusDp = 10f,
+            aspectRatio = 4f / 5f,
+        ),
+        LayoutTemplate(
+            id = TemplateIds.ADAPTIVE_GRID_14,
+            name = TemplateIds.ADAPTIVE_GRID_14,
+            cells = adaptiveGridCells(count = 14, columns = 4),
+            defaultSpacingDp = 5f,
+            defaultCornerRadiusDp = 10f,
+            aspectRatio = 4f / 5f,
+        ),
+        LayoutTemplate(
+            id = TemplateIds.ADAPTIVE_GRID_15,
+            name = TemplateIds.ADAPTIVE_GRID_15,
+            cells = adaptiveGridCells(count = 15, columns = 5),
+            defaultSpacingDp = 4f,
+            defaultCornerRadiusDp = 9f,
+            aspectRatio = 5f / 4f,
         ),
         LayoutTemplate(
             id = TemplateIds.BALANCED_MOSAIC_7,

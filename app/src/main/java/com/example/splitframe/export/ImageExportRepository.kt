@@ -5,13 +5,16 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Shader
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import com.example.splitframe.domain.CollageGradient
 import com.example.splitframe.domain.ExportResult
 import com.example.splitframe.domain.ImageDimensions
 import com.example.splitframe.domain.ImageSource
@@ -63,7 +66,7 @@ class ImageExportRepository(
             strokeWidth = project.borderWidthDp
         }
 
-        canvas.drawColor(project.backgroundColor.toArgbInt())
+        canvas.drawGradient(project.backgroundGradient, widthPx.toFloat(), heightPx.toFloat())
         val spacingPx = project.spacingDp
         val cornerRadiusPx = project.cornerRadiusDp
         val targetDecodeEdge = widthPx.coerceAtLeast(heightPx)
@@ -248,4 +251,23 @@ class ImageExportRepository(
     }
 
     private fun ULong.toArgbInt(): Int = toLong().toInt()
+
+    private fun Canvas.drawGradient(gradient: CollageGradient, widthPx: Float, heightPx: Float) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(
+                0f,
+                0f,
+                widthPx,
+                heightPx,
+                intArrayOf(
+                    gradient.startColor.toArgbInt(),
+                    gradient.centerColor.toArgbInt(),
+                    gradient.endColor.toArgbInt(),
+                ),
+                floatArrayOf(0f, 0.55f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+        }
+        drawRect(0f, 0f, widthPx, heightPx, paint)
+    }
 }
