@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.splitframe.domain.SingleImagePlanError
 import com.example.splitframe.domain.SingleImagePlanResult
 import com.example.splitframe.domain.SingleImageResizeRequest
-import com.example.splitframe.export.SingleImageEnhancementRepository
+import com.example.splitframe.export.SingleImageProcessingRepository
 import com.example.splitframe.export.SingleImageProcessResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class SingleImageViewModel(
-    private val repository: SingleImageEnhancementRepository,
+    private val repository: SingleImageProcessingRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(SingleImageState())
     val state: StateFlow<SingleImageState> = _state.asStateFlow()
@@ -36,7 +36,6 @@ class SingleImageViewModel(
                 refreshPlan()
             }
             is SingleImageIntent.SelectPreset -> updateRequest { it.copy(preset = intent.preset) }
-            is SingleImageIntent.SelectQualityMode -> updateRequest { it.copy(qualityMode = intent.mode) }
             is SingleImageIntent.SelectOutputFormat -> updateRequest { it.copy(outputFormat = intent.format) }
             is SingleImageIntent.UpdateJpegQuality -> updateRequest { it.copy(jpegQuality = intent.quality.coerceIn(60, 100)) }
             is SingleImageIntent.UpdateCustomWidth -> updateRequest { it.copy(customWidthPx = intent.widthPx) }

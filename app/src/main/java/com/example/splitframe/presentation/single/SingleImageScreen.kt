@@ -28,7 +28,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddPhotoAlternate
-import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
@@ -68,7 +67,6 @@ import com.example.splitframe.R
 import com.example.splitframe.domain.ImageSource
 import com.example.splitframe.domain.SingleImageOutputFormat
 import com.example.splitframe.domain.SingleImagePlanResult
-import com.example.splitframe.domain.SingleImageQualityMode
 import com.example.splitframe.domain.SingleImageResizePreset
 import com.example.splitframe.domain.SingleImageResizeWarning
 import com.example.splitframe.presentation.coilModel
@@ -159,7 +157,7 @@ fun SingleImageScreen(
                 StatusMessage(
                     text = stringResource(R.string.single_image_empty),
                     tone = StatusTone.Info,
-                    icon = Icons.Default.AutoFixHigh,
+                    icon = Icons.Default.AddPhotoAlternate,
                 )
                 return@Column
             }
@@ -184,10 +182,10 @@ fun SingleImageScreen(
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PrimaryActionButton(
-                    text = stringResource(R.string.enhance_quality),
+                    text = stringResource(R.string.save),
                     onClick = { onIntent(SingleImageIntent.Process) },
                     enabled = !state.isProcessing && state.planResult is SingleImagePlanResult.Valid,
-                    icon = Icons.Default.AutoFixHigh,
+                    icon = Icons.Default.Save,
                     modifier = Modifier.weight(1f),
                 )
                 state.result?.let { result ->
@@ -201,10 +199,6 @@ fun SingleImageScreen(
                 }
             }
 
-            StatusMessage(
-                text = stringResource(R.string.single_image_quality_notice),
-                tone = StatusTone.Info,
-            )
         }
     }
 }
@@ -213,7 +207,6 @@ fun SingleImageScreen(
 private fun SingleImagePreview(state: SingleImageState) {
     val source = state.source ?: return
     val result = state.result
-    var comparison by rememberSaveable { mutableFloatStateOf(0.5f) }
     var zoom by rememberSaveable { mutableFloatStateOf(1f) }
     var panX by rememberSaveable { mutableFloatStateOf(0f) }
     var panY by rememberSaveable { mutableFloatStateOf(0f) }
@@ -243,23 +236,11 @@ private fun SingleImagePreview(state: SingleImageState) {
                     translationY = panY * panRangePx,
                 )
             AsyncImage(
-                model = source.coilModel(),
-                contentDescription = stringResource(R.string.before),
+                model = result?.source?.coilModel() ?: source.coilModel(),
+                contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = transform,
             )
-            if (result != null) {
-                AsyncImage(
-                    model = result.source.coilModel(),
-                    contentDescription = stringResource(R.string.after),
-                    contentScale = ContentScale.Fit,
-                    modifier = transform.graphicsLayer(alpha = comparison),
-                )
-            }
-        }
-        if (result != null) {
-            Text(stringResource(R.string.comparison), style = MaterialTheme.typography.labelLarge)
-            Slider(value = comparison, onValueChange = { comparison = it }, valueRange = 0f..1f)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.zoom), style = MaterialTheme.typography.labelLarge)
@@ -321,19 +302,6 @@ private fun SingleImageControls(
                 )
             }
         }
-
-        Text(stringResource(R.string.quality_mode), style = MaterialTheme.typography.labelLarge)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SingleImageQualityMode.entries.forEach { mode ->
-                FilterChip(
-                    selected = request.qualityMode == mode,
-                    onClick = { onIntent(SingleImageIntent.SelectQualityMode(mode)) },
-                    label = { Text(mode.label()) },
-                    enabled = !state.isProcessing,
-                )
-            }
-        }
-        Text(stringResource(R.string.ai_enhance_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         Text(stringResource(R.string.output_format), style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -421,13 +389,6 @@ private fun SingleImageResizePreset.label(): String =
         SingleImageResizePreset.Scale2x -> stringResource(R.string.preset_2x)
         SingleImageResizePreset.Scale4x -> stringResource(R.string.preset_4x)
         SingleImageResizePreset.Custom -> stringResource(R.string.preset_custom)
-    }
-
-@Composable
-private fun SingleImageQualityMode.label(): String =
-    when (this) {
-        SingleImageQualityMode.Standard -> stringResource(R.string.quality_standard)
-        SingleImageQualityMode.Enhanced -> stringResource(R.string.quality_enhanced)
     }
 
 @Composable

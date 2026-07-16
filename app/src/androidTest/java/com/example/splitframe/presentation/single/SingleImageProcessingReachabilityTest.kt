@@ -3,6 +3,7 @@ package com.example.splitframe.presentation.single
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -44,7 +45,7 @@ class SingleImageProcessingReachabilityTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("Enhance one image")
+        composeRule.onNodeWithContentDescription("Resize one image")
             .assertIsDisplayed()
             .performClick()
 
@@ -77,7 +78,8 @@ class SingleImageProcessingReachabilityTest {
         }
 
         composeRule.onNodeWithText("Select photo").assertIsDisplayed()
-        composeRule.onNodeWithText("Enhance Quality").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Save").performScrollTo().assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("Quality mode").fetchSemanticsNodes().isEmpty())
         composeRule.onNodeWithText("Resize preset").assertIsDisplayed()
         composeRule.onNodeWithText("Output format").assertIsDisplayed()
     }

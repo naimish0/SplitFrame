@@ -199,7 +199,6 @@ private fun SplitFrameSectionPreview() {
     SplitFrameTheme {
         SplitFrameSection(
             title = stringResource(R.string.layout_controls),
-            supportingText = stringResource(R.string.enhance_explanation),
         ) {
             StatusMessage(text = stringResource(R.string.export_success), tone = StatusTone.Success)
             PrimaryActionButton(text = stringResource(R.string.save), onClick = {}, icon = Icons.Default.Save)

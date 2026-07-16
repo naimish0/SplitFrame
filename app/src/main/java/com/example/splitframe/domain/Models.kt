@@ -135,7 +135,6 @@ data class CollageImage(
 
 sealed interface ImageSource {
     data class LocalUri(val uri: String) : ImageSource
-    data class Enhanced(val originalUri: String, val cachedEnhancedPath: String) : ImageSource
 }
 
 enum class ExportResolution(val label: String, val longEdgePx: Int) {

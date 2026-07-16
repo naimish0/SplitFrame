@@ -107,11 +107,10 @@
     <string name="sort_most_used">Most used</string>
     <string name="sort_recently_used">Recently used</string>
     <string name="sort_orientation">Orientation</string>
-    <string name="single_image_tool">Enhance one image</string>
-    <string name="single_image_title">Enhance image</string>
-    <string name="single_image_subtitle">Resize and improve one photo.</string>
-    <string name="single_image_empty">Select one image to preview, resize and enhance it before saving a new copy.</string>
-    <string name="single_image_quality_notice">Standard mode is resolution-only upscaling. Enhanced mode adds conservative denoise, sharpening and artifact cleanup. AI Enhance is not exposed for full-image processing.</string>
+    <string name="single_image_tool">Resize one image</string>
+    <string name="single_image_title">Resize image</string>
+    <string name="single_image_subtitle">Resize and export one photo.</string>
+    <string name="single_image_empty">Select one image to preview, resize and save a new copy.</string>
     <string name="resize_preset">Resize preset</string>
     <string name="preset_1080p">1080p</string>
     <string name="preset_2k">2K</string>
@@ -123,10 +122,6 @@
     <string name="height_px">Height px</string>
     <string name="lock_aspect_ratio">Lock aspect ratio</string>
     <string name="aspect_ratio_warning">Unlocking the aspect ratio can distort the image.</string>
-    <string name="quality_mode">Quality mode</string>
-    <string name="quality_standard">Standard</string>
-    <string name="quality_enhanced">Enhanced</string>
-    <string name="ai_enhance_unavailable">AI Enhance is hidden here because the integrated model is not a full-image, aspect-preserving enhancer.</string>
     <string name="output_format">Output format</string>
     <string name="format_jpeg">JPEG</string>
     <string name="format_png">PNG</string>
@@ -139,7 +134,6 @@
     <string name="processing_image">Processing image...</string>
     <string name="single_image_saved_to_gallery">Image has been stored in gallery.</string>
     <string name="use_in_collage">Use in collage</string>
-    <string name="comparison">Before/after</string>
     <string name="pan">Pan</string>
     <string name="cell_empty">Tap to add photo</string>
     <string name="cell_number">Cell %1$d</string>
@@ -148,13 +142,7 @@
     <string name="replace_photo">Replace</string>
     <string name="remove_photo">Remove</string>
     <string name="remove_photo_title">Remove this photo?</string>
-    <string name="remove_photo_body">This clears the photo and its crop or enhancement edits from the collage.</string>
-    <string name="enhance_quality">Enhance Quality</string>
-    <string name="enhance_explanation">Enhance improves perceived sharpness. It cannot recover original detail that was not captured.</string>
-    <string name="enhanced_ready">Enhanced version applied</string>
-    <string name="enhancing">Enhancing...</string>
-    <string name="before">Before</string>
-    <string name="after">After</string>
+    <string name="remove_photo_body">This clears the photo and its crop edits from the collage.</string>
     <string name="crop_gesture_help">Drag inside the selected cell to reposition. Pinch or use zoom to crop closer.</string>
     <string name="zoom">Zoom</string>
     <string name="zoom_value">%1$.1fx</string>
@@ -184,12 +172,6 @@
     <string name="export_selected_resolution">Selected: %1$s, %2$d x %3$d</string>
     <string name="missing_images">Add photos to every cell before exporting.</string>
     <string name="no_photo_selected">No photo selected for this cell.</string>
-    <string name="enhance_failed">Enhance failed. The original photo is still selected.</string>
-    <string name="enhance_model_load_failed">Enhancement model could not be loaded. The original photo is still selected.</string>
-    <string name="enhance_model_contract_failed">Enhancement model format is not supported on this device. The original photo is still selected.</string>
-    <string name="enhance_decode_failed">Selected image could not be decoded for enhancement. The original photo is still selected.</string>
-    <string name="enhance_out_of_memory">Device does not have enough memory to enhance this image. The original photo is still selected.</string>
-    <string name="enhance_output_invalid">Enhanced image could not be saved correctly. The original photo is still selected.</string>
     <string name="image_load_failed">Could not load this photo.</string>
     <string name="image_unsupported_format">One or more photos use an unsupported image format.</string>
     <string name="image_unreadable">One or more photos could not be read. Valid selections were preserved.</string>
@@ -206,8 +188,6 @@
     <string name="share_subject">SplitFrame export</string>
     <string name="select_photo">Select photo</string>
     <string name="ad_not_ready">Ad is not ready yet.</string>
-    <string name="reset_enhancement">Use original</string>
-    <string name="model_notice">ESRGAN TensorFlow Lite model, Apache 2.0 TensorFlow sample source.</string>
     <string name="file_size_kb">%1$d KB</string>
     <string name="file_size_mb">%1$.1f MB</string>
     <string name="reset_project_title">Reset this layout?</string>
@@ -225,4 +205,5 @@
     <string name="thumbnail_strip">Selected photos</string>
     <string name="thumbnail_position">%1$d of %2$d</string>
     <string name="thumbnail_content_description">Photo %1$d of %2$d</string>
+    <string name="add_photo_to_edit">Add photo to edit.</string>
 </resources>

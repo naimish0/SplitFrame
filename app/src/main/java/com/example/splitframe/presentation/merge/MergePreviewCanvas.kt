@@ -3,6 +3,7 @@ package com.example.splitframe.presentation.merge
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -13,11 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +41,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -61,7 +65,6 @@ import kotlin.math.roundToInt
 fun MergePreviewCanvas(
     project: MergeProject,
     modifier: Modifier = Modifier,
-    previewOverrides: Map<Int, Any> = emptyMap(),
     sourceDimensions: Map<Int, ImageDimensions> = emptyMap(),
     selectedCellIndex: Int? = null,
     onCellTap: (Int) -> Unit,
@@ -69,7 +72,7 @@ fun MergePreviewCanvas(
 ) {
     val painters = project.template.cells.associate { cell ->
         val source = project.assignedImages[cell.index]
-        val model = previewOverrides[cell.index] ?: source?.coilModel()
+        val model = source?.coilModel()
         cell.index to rememberAsyncImagePainter(
             model = model,
             contentScale = ContentScale.Crop,
@@ -291,8 +294,8 @@ fun MergePreviewCanvas(
                     EmptyCellLabel(
                         frame = frame,
                         canvasSize = canvasSize,
-                        cellIndex = cell.index,
                         textColor = emptyText,
+                        onClick = { onCellTap(cell.index) },
                     )
                 }
         }
@@ -317,10 +320,11 @@ private fun selectedFrameForGesture(
 private fun EmptyCellLabel(
     frame: RectPx,
     canvasSize: IntSize,
-    cellIndex: Int,
     textColor: Color,
+    onClick: () -> Unit,
 ) {
     val density = LocalDensity.current
+    val description = stringResource(R.string.add_photo_to_edit)
     Box(
         modifier = Modifier
             .offset {
@@ -336,26 +340,26 @@ private fun EmptyCellLabel(
         contentAlignment = Alignment.Center,
     ) {
         Surface(
+            modifier = Modifier
+                .semantics {
+                    contentDescription = description
+                    role = Role.Button
+                }
+                .clickable(onClick = onClick),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
             shape = RoundedCornerShape(8.dp),
         ) {
-            androidx.compose.foundation.layout.Row(
+            Box(
                 modifier = Modifier
                     .sizeIn(minWidth = 96.dp)
                     .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Default.AddPhotoAlternate,
+                    imageVector = Icons.Default.Add,
                     contentDescription = null,
                     tint = textColor,
                     modifier = Modifier.size(18.dp),
-                )
-                Text(
-                    text = stringResource(R.string.empty_cell_action, cellIndex + 1),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = textColor,
                 )
             }
         }

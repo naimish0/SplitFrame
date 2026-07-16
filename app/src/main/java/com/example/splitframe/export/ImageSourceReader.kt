@@ -50,7 +50,6 @@ class ImageSourceReader(
 
     private fun decode(source: ImageSource, options: BitmapFactory.Options): Bitmap? =
         when (source) {
-            is ImageSource.Enhanced -> BitmapFactory.decodeFile(source.cachedEnhancedPath, options)
             is ImageSource.LocalUri -> {
                 contentResolver.openInputStream(Uri.parse(source.uri))?.use { input ->
                     BitmapFactory.decodeStream(input, null, options)
@@ -60,7 +59,6 @@ class ImageSourceReader(
 
     private fun hasSupportedMimeType(source: ImageSource): Boolean =
         when (source) {
-            is ImageSource.Enhanced -> true
             is ImageSource.LocalUri -> {
                 val mimeType = contentResolver.getType(Uri.parse(source.uri))?.lowercase()
                 mimeType == null ||
@@ -71,7 +69,6 @@ class ImageSourceReader(
     private fun exifOrientation(source: ImageSource): ExifOrientation =
         try {
             val exif = when (source) {
-                is ImageSource.Enhanced -> ExifInterface(source.cachedEnhancedPath)
                 is ImageSource.LocalUri -> contentResolver.openInputStream(Uri.parse(source.uri))?.use(::ExifInterface)
             }
             when (exif?.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
