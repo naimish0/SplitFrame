@@ -3,6 +3,8 @@ package com.example.splitframe.presentation
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,6 +38,7 @@ fun SplitFrameApp(
     val context = LocalContext.current
     var screen by remember { mutableStateOf(AppScreen.Templates) }
     var lastShownAdUri by rememberSaveable { mutableStateOf<String?>(null) }
+    val templateGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
     val templatePaletteSeed = rememberSaveable { Random.nextInt() }
 
     LaunchedEffect(Unit) {
@@ -53,16 +56,22 @@ fun SplitFrameApp(
         AppScreen.Templates -> TemplatePickerScreen(
             state = state,
             paletteSeed = templatePaletteSeed,
+            gridState = templateGridState,
             onTemplateSelected = { templateId ->
                 viewModel.process(MergeIntent.SelectTemplate(templateId))
                 screen = AppScreen.Editor
             },
         )
-        AppScreen.Editor -> EditorScreen(
-            state = state,
-            onIntent = viewModel::process,
-            onBack = { screen = AppScreen.Templates },
-        )
+        AppScreen.Editor -> {
+            BackHandler {
+                screen = AppScreen.Templates
+            }
+            EditorScreen(
+                state = state,
+                onIntent = viewModel::process,
+                onBack = { screen = AppScreen.Templates },
+            )
+        }
     }
 }
 

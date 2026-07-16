@@ -18,7 +18,11 @@ sealed interface MergeIntent {
     data class ResetEnhancement(val cellIndex: Int) : MergeIntent
     data class ReorderImages(val fromIndex: Int, val toIndex: Int) : MergeIntent
     data class SwapCells(val a: Int, val b: Int) : MergeIntent
-    data class UpdateImageTransform(val cellIndex: Int, val transform: ImageTransform) : MergeIntent
+    data class UpdateImageTransform(
+        val cellIndex: Int,
+        val transform: ImageTransform,
+        val trackUndo: Boolean = true,
+    ) : MergeIntent
     data class ResetImageTransform(val cellIndex: Int) : MergeIntent
     data class UpdateSpacing(val dp: Float) : MergeIntent
     data class UpdateCornerRadius(val dp: Float) : MergeIntent
@@ -44,7 +48,11 @@ sealed interface MergeAction {
     data class ResetEnhancement(val cellIndex: Int) : MergeAction
     data class ReorderImages(val fromIndex: Int, val toIndex: Int) : MergeAction
     data class SwapCells(val a: Int, val b: Int) : MergeAction
-    data class UpdateImageTransform(val cellIndex: Int, val transform: ImageTransform) : MergeAction
+    data class UpdateImageTransform(
+        val cellIndex: Int,
+        val transform: ImageTransform,
+        val trackUndo: Boolean = true,
+    ) : MergeAction
     data class ResetImageTransform(val cellIndex: Int) : MergeAction
     data class UpdateSpacing(val dp: Float) : MergeAction
     data class UpdateCornerRadius(val dp: Float) : MergeAction

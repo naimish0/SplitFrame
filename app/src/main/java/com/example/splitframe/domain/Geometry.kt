@@ -122,6 +122,94 @@ object LayoutMath {
         )
     }
 
+    fun transformAfterGesture(
+        sourceDimensions: ImageDimensions?,
+        destinationWidthPx: Float,
+        destinationHeightPx: Float,
+        current: ImageTransform,
+        panXpx: Float,
+        panYpx: Float,
+        zoomChange: Float,
+    ): ImageTransform {
+        val nextZoom = (current.zoom * zoomChange).coerceIn(ImageTransform.MIN_ZOOM, ImageTransform.MAX_ZOOM)
+        val next = current.copy(zoom = nextZoom).normalized()
+        if (destinationWidthPx <= 0f || destinationHeightPx <= 0f) return next
+        val dimensions = sourceDimensions ?: return next.copy(
+            panX = next.panX - (panXpx / max(1f, destinationWidthPx)) * 2f,
+            panY = next.panY - (panYpx / max(1f, destinationHeightPx)) * 2f,
+        ).normalized()
+
+        val crop = cropToFillSourceRect(
+            sourceWidthPx = dimensions.widthPx.toFloat(),
+            sourceHeightPx = dimensions.heightPx.toFloat(),
+            destinationWidthPx = destinationWidthPx,
+            destinationHeightPx = destinationHeightPx,
+            transform = next,
+        )
+        val drawScale = destinationWidthPx / crop.width.coerceAtLeast(1f)
+        val maxCenterShiftX = max(0f, (dimensions.widthPx.toFloat() - crop.width) / 2f)
+        val maxCenterShiftY = max(0f, (dimensions.heightPx.toFloat() - crop.height) / 2f)
+        val panDeltaX = if (maxCenterShiftX > 0f) {
+            (-panXpx / drawScale) / maxCenterShiftX
+        } else {
+            0f
+        }
+        val panDeltaY = if (maxCenterShiftY > 0f) {
+            (-panYpx / drawScale) / maxCenterShiftY
+        } else {
+            0f
+        }
+        return next.copy(
+            panX = next.panX + panDeltaX,
+            panY = next.panY + panDeltaY,
+        ).normalized()
+    }
+
+    fun transformAfterDoubleTap(
+        sourceDimensions: ImageDimensions?,
+        destinationWidthPx: Float,
+        destinationHeightPx: Float,
+        current: ImageTransform,
+        tapXInFramePx: Float,
+        tapYInFramePx: Float,
+    ): ImageTransform {
+        if (current.normalized().zoom > 1.05f) return ImageTransform.Default
+        val target = ImageTransform(zoom = 2.2f).normalized()
+        val dimensions = sourceDimensions ?: return target
+        if (destinationWidthPx <= 0f || destinationHeightPx <= 0f) return target
+
+        val currentCrop = cropToFillSourceRect(
+            sourceWidthPx = dimensions.widthPx.toFloat(),
+            sourceHeightPx = dimensions.heightPx.toFloat(),
+            destinationWidthPx = destinationWidthPx,
+            destinationHeightPx = destinationHeightPx,
+            transform = current,
+        )
+        val sourceTapX = currentCrop.left + (tapXInFramePx / destinationWidthPx).coerceIn(0f, 1f) * currentCrop.width
+        val sourceTapY = currentCrop.top + (tapYInFramePx / destinationHeightPx).coerceIn(0f, 1f) * currentCrop.height
+        val targetCrop = cropToFillSourceRect(
+            sourceWidthPx = dimensions.widthPx.toFloat(),
+            sourceHeightPx = dimensions.heightPx.toFloat(),
+            destinationWidthPx = destinationWidthPx,
+            destinationHeightPx = destinationHeightPx,
+            transform = target,
+        )
+        val maxCenterShiftX = max(0f, (dimensions.widthPx.toFloat() - targetCrop.width) / 2f)
+        val maxCenterShiftY = max(0f, (dimensions.heightPx.toFloat() - targetCrop.height) / 2f)
+        return target.copy(
+            panX = if (maxCenterShiftX > 0f) {
+                (sourceTapX - dimensions.widthPx / 2f) / maxCenterShiftX
+            } else {
+                0f
+            },
+            panY = if (maxCenterShiftY > 0f) {
+                (sourceTapY - dimensions.heightPx / 2f) / maxCenterShiftY
+            } else {
+                0f
+            },
+        ).normalized()
+    }
+
     fun outputSizeForResolution(
         template: LayoutTemplate,
         resolution: ExportResolution,

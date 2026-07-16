@@ -30,6 +30,12 @@
     <string name="template_adaptive_grid_7">Adaptive grid 7</string>
     <string name="template_adaptive_grid_8">Adaptive grid 8</string>
     <string name="template_adaptive_grid_9">Adaptive grid 9</string>
+    <string name="template_adaptive_grid_10">Adaptive grid 10</string>
+    <string name="template_adaptive_grid_11">Adaptive grid 11</string>
+    <string name="template_adaptive_grid_12">Adaptive grid 12</string>
+    <string name="template_adaptive_grid_13">Adaptive grid 13</string>
+    <string name="template_adaptive_grid_14">Adaptive grid 14</string>
+    <string name="template_adaptive_grid_15">Adaptive grid 15</string>
     <string name="template_balanced_mosaic_7">Balanced mosaic 7</string>
     <string name="template_balanced_mosaic_8">Balanced mosaic 8</string>
     <string name="template_balanced_mosaic_9">Balanced mosaic 9</string>
@@ -59,6 +65,12 @@
     <string name="template_adaptive_grid_7_desc">Seven photos in a balanced three-column grid.</string>
     <string name="template_adaptive_grid_8_desc">Eight photos with a stretched final row.</string>
     <string name="template_adaptive_grid_9_desc">Nine photos in a classic three-column grid.</string>
+    <string name="template_adaptive_grid_10_desc">Ten photos in a compact editorial grid.</string>
+    <string name="template_adaptive_grid_11_desc">Eleven photos arranged for dense story sets.</string>
+    <string name="template_adaptive_grid_12_desc">Twelve photos in a clean four-column grid.</string>
+    <string name="template_adaptive_grid_13_desc">Thirteen photos with an adaptive final row.</string>
+    <string name="template_adaptive_grid_14_desc">Fourteen photos balanced across compact rows.</string>
+    <string name="template_adaptive_grid_15_desc">Fifteen photos in a polished collection grid.</string>
     <string name="template_balanced_mosaic_7_desc">Seven photos with varied editorial proportions.</string>
     <string name="template_balanced_mosaic_8_desc">Eight photos in a balanced mixed layout.</string>
     <string name="template_balanced_mosaic_9_desc">Nine photos with one featured lead image.</string>
@@ -117,7 +129,7 @@
     <string name="image_unsupported_format">One or more photos use an unsupported image format.</string>
     <string name="image_unreadable">One or more photos could not be read. Valid selections were preserved.</string>
     <string name="image_duplicate_skipped">Duplicate photos were skipped.</string>
-    <string name="image_max_count_reached">SplitFrame supports up to 9 photos. Extra photos were skipped.</string>
+    <string name="image_max_count_reached">SplitFrame supports up to 15 photos. Extra photos were skipped.</string>
     <string name="layout_requires_photo_count">This layout does not match the current photo count.</string>
     <string name="ad_banner_description">Sponsored banner</string>
     <string name="sponsored">Sponsored</string>
@@ -140,7 +152,8 @@
     <string name="editor_canvas">Editor canvas</string>
     <string name="selected_cell_indicator">Selected cell %1$d</string>
     <string name="empty_cell_action">Add photo to cell %1$d</string>
-    <string name="photo_count">%1$d of %2$d photos</string>
+    <string name="photo_count">%1$d/%2$d selected</string>
+    <string name="photo_limit_reached">You have selected the maximum of 15 photos for this collage.</string>
     <string name="auto_arrange">Auto Arrange</string>
     <string name="undo">Undo</string>
     <string name="redo">Redo</string>

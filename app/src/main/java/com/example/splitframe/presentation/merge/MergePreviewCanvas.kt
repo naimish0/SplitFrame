@@ -1,5 +1,7 @@
 package com.example.splitframe.presentation.merge
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -28,6 +30,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -43,6 +46,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.example.splitframe.R
+import com.example.splitframe.domain.CollageGradient
 import com.example.splitframe.domain.ImageDimensions
 import com.example.splitframe.domain.ImageTransform
 import com.example.splitframe.domain.LayoutMath
@@ -51,7 +55,6 @@ import com.example.splitframe.domain.RectPx
 import com.example.splitframe.domain.TemplateKind
 import com.example.splitframe.presentation.coilModel
 import com.example.splitframe.ui.theme.splitFrameColors
-import kotlin.math.max
 import kotlin.math.roundToInt
 
 @Composable
@@ -62,7 +65,7 @@ fun MergePreviewCanvas(
     sourceDimensions: Map<Int, ImageDimensions> = emptyMap(),
     selectedCellIndex: Int? = null,
     onCellTap: (Int) -> Unit,
-    onImageTransformChanged: (Int, ImageTransform) -> Unit = { _, _ -> },
+    onImageTransformChanged: (Int, ImageTransform, Boolean) -> Unit = { _, _, _ -> },
 ) {
     val painters = project.template.cells.associate { cell ->
         val source = project.assignedImages[cell.index]
@@ -73,8 +76,27 @@ fun MergePreviewCanvas(
             filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium,
         )
     }
+    val animatedTransforms = project.template.cells.associate { cell ->
+        val target = project.imageTransforms[cell.index] ?: ImageTransform.Default
+        cell.index to ImageTransform(
+            zoom = animateFloatAsState(
+                targetValue = target.zoom,
+                animationSpec = tween(durationMillis = 120),
+                label = "cell${cell.index}Zoom",
+            ).value,
+            panX = animateFloatAsState(
+                targetValue = target.panX,
+                animationSpec = tween(durationMillis = 120),
+                label = "cell${cell.index}PanX",
+            ).value,
+            panY = animateFloatAsState(
+                targetValue = target.panY,
+                animationSpec = tween(durationMillis = 120),
+                label = "cell${cell.index}PanY",
+            ).value,
+        )
+    }
 
-    val background = project.backgroundColor.toComposeColor()
     val border = project.borderColor.toComposeColor()
     val splitFrameColors = splitFrameColors()
     val dividerColor = MaterialTheme.colorScheme.surface
@@ -101,13 +123,17 @@ fun MergePreviewCanvas(
                         ) ?: return@detectTransformGestures
                         if (!frame.contains(centroid.x, centroid.y)) return@detectTransformGestures
                         val current = project.imageTransforms[cellIndex] ?: ImageTransform.Default
-                        val next = current.copy(
-                            zoom = current.zoom * zoomChange,
-                            panX = current.panX - (pan.x / max(1f, frame.width)) * 2f,
-                            panY = current.panY - (pan.y / max(1f, frame.height)) * 2f,
-                        ).normalized()
+                        val next = LayoutMath.transformAfterGesture(
+                            sourceDimensions = sourceDimensions[cellIndex],
+                            destinationWidthPx = frame.width,
+                            destinationHeightPx = frame.height,
+                            current = current,
+                            panXpx = pan.x,
+                            panYpx = pan.y,
+                            zoomChange = zoomChange,
+                        )
                         if (next != current) {
-                            onImageTransformChanged(cellIndex, next)
+                            onImageTransformChanged(cellIndex, next, false)
                         }
                     }
                 }
@@ -123,7 +149,16 @@ fun MergePreviewCanvas(
                                 spacingPx = project.spacingDp.dp.toPx(),
                             ) ?: return@detectTapGestures
                             if (frame.contains(offset.x, offset.y) && project.assignedImages.containsKey(cellIndex)) {
-                                onImageTransformChanged(cellIndex, ImageTransform.Default)
+                                val current = project.imageTransforms[cellIndex] ?: ImageTransform.Default
+                                val next = LayoutMath.transformAfterDoubleTap(
+                                    sourceDimensions = sourceDimensions[cellIndex],
+                                    destinationWidthPx = frame.width,
+                                    destinationHeightPx = frame.height,
+                                    current = current,
+                                    tapXInFramePx = offset.x - frame.left,
+                                    tapYInFramePx = offset.y - frame.top,
+                                )
+                                onImageTransformChanged(cellIndex, next, true)
                             }
                         },
                         onTap = { offset ->
@@ -146,7 +181,7 @@ fun MergePreviewCanvas(
                     )
                 },
         ) {
-            drawRect(background)
+            drawRect(project.backgroundGradient.toBrush(size))
             val cornerRadiusPx = project.cornerRadiusDp.dp.toPx()
             val spacingPx = project.spacingDp.dp.toPx()
             val borderWidthPx = project.borderWidthDp.dp.toPx()
@@ -163,7 +198,7 @@ fun MergePreviewCanvas(
                             painter = painters[0],
                             frame = frame,
                             dimensions = sourceDimensions[0],
-                            transform = project.imageTransforms[0] ?: ImageTransform.Default,
+                            transform = animatedTransforms[0] ?: ImageTransform.Default,
                         )
                     }
                     clipRect(left = dividerX) {
@@ -171,7 +206,7 @@ fun MergePreviewCanvas(
                             painter = painters[1],
                             frame = frame,
                             dimensions = sourceDimensions[1],
-                            transform = project.imageTransforms[1] ?: ImageTransform.Default,
+                            transform = animatedTransforms[1] ?: ImageTransform.Default,
                         )
                     }
                     drawLine(
@@ -216,7 +251,7 @@ fun MergePreviewCanvas(
                             painter = painters[cell.index],
                             frame = frame,
                             dimensions = sourceDimensions[cell.index],
-                            transform = project.imageTransforms[cell.index] ?: ImageTransform.Default,
+                            transform = animatedTransforms[cell.index] ?: ImageTransform.Default,
                         )
                     }
                     if (borderWidthPx > 0f) {
@@ -381,3 +416,10 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPainterInFrame(
 }
 
 private fun ULong.toComposeColor(): Color = Color(toLong().toInt())
+
+private fun CollageGradient.toBrush(size: Size): Brush =
+    Brush.linearGradient(
+        colors = listOf(startColor.toComposeColor(), centerColor.toComposeColor(), endColor.toComposeColor()),
+        start = Offset.Zero,
+        end = Offset(size.width, size.height),
+    )

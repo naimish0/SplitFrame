@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
@@ -60,6 +61,7 @@ import kotlin.random.Random
 fun TemplatePickerScreen(
     state: MergeState,
     paletteSeed: Int,
+    gridState: LazyGridState,
     onTemplateSelected: (String) -> Unit,
 ) {
     val selectedTemplateId = state.project?.template?.id
@@ -101,6 +103,7 @@ fun TemplatePickerScreen(
         } else {
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 168.dp),
+                state = gridState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
