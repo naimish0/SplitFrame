@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,15 +15,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -44,6 +49,8 @@ import com.example.splitframe.R
 import com.example.splitframe.ads.BannerAd
 import com.example.splitframe.domain.LayoutMath
 import com.example.splitframe.domain.LayoutTemplate
+import com.example.splitframe.domain.TemplateCatalog
+import com.example.splitframe.domain.TemplateFilter
 import com.example.splitframe.domain.TemplateKind
 import com.example.splitframe.presentation.descriptionRes
 import com.example.splitframe.presentation.titleRes
@@ -62,18 +69,40 @@ fun TemplatePickerScreen(
     state: MergeState,
     paletteSeed: Int,
     gridState: LazyGridState,
+    selectedFilter: TemplateFilter,
+    onFilterSelected: (TemplateFilter) -> Unit,
+    onOpenSingleImageTool: () -> Unit,
     onTemplateSelected: (String) -> Unit,
 ) {
     val selectedTemplateId = state.project?.template?.id
     val selectedPhotoCount = state.project?.assignedImages?.size ?: 0
-    val templatePalettes = remember(paletteSeed, state.availableTemplates) {
-        randomTemplatePalettes(state.availableTemplates, paletteSeed)
+    val visibleTemplates = remember(
+        state.availableTemplates,
+        selectedPhotoCount,
+        selectedFilter,
+    ) {
+        TemplateCatalog.filterTemplates(
+            templates = state.availableTemplates,
+            imageCount = selectedPhotoCount,
+            filter = selectedFilter,
+        )
+    }
+    val templatePalettes = remember(paletteSeed, visibleTemplates) {
+        randomTemplatePalettes(visibleTemplates, paletteSeed)
     }
     Scaffold(
         topBar = {
             SplitFrameTopAppBar(
                 title = stringResource(R.string.app_name),
                 subtitle = stringResource(R.string.template_picker_subtitle),
+                actions = {
+                    IconButton(onClick = onOpenSingleImageTool) {
+                        Icon(
+                            imageVector = Icons.Default.AutoFixHigh,
+                            contentDescription = stringResource(R.string.single_image_tool),
+                        )
+                    }
+                },
             )
         },
         bottomBar = {
@@ -86,38 +115,44 @@ fun TemplatePickerScreen(
             }
         },
     ) { padding ->
-        if (state.availableTemplates.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                StatusMessage(
-                    text = stringResource(R.string.templates_empty_message),
-                    tone = StatusTone.Info,
-                    icon = Icons.Default.ViewModule,
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 168.dp),
+            state = gridState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                TemplateFilterHeader(
+                    selectedFilter = selectedFilter,
+                    onFilterSelected = onFilterSelected,
                 )
             }
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 168.dp),
-                state = gridState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(state.availableTemplates, key = { it.id }) { template ->
-                    val enabled = selectedPhotoCount == 0 || template.cells.size == selectedPhotoCount
+            if (visibleTemplates.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        StatusMessage(
+                            text = stringResource(R.string.templates_empty_message),
+                            tone = StatusTone.Info,
+                            icon = Icons.Default.ViewModule,
+                        )
+                    }
+                }
+            } else {
+                items(visibleTemplates, key = { it.id }) { template ->
                     TemplateCard(
                         template = template,
                         palette = templatePalettes.getValue(template.id),
                         selected = selectedTemplateId == template.id,
-                        enabled = enabled,
+                        enabled = true,
                         onClick = { onTemplateSelected(template.id) },
                     )
                 }
@@ -125,6 +160,32 @@ fun TemplatePickerScreen(
         }
     }
 }
+
+@Composable
+private fun TemplateFilterHeader(
+    selectedFilter: TemplateFilter,
+    onFilterSelected: (TemplateFilter) -> Unit,
+) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        TemplateFilter.entries.forEach { filter ->
+            FilterChip(
+                selected = selectedFilter == filter,
+                onClick = { onFilterSelected(filter) },
+                label = { Text(filter.label()) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TemplateFilter.label(): String =
+    when (this) {
+        TemplateFilter.ALL -> stringResource(R.string.filter_all)
+        TemplateFilter.SYMMETRICAL -> stringResource(R.string.template_group_symmetrical)
+        TemplateFilter.ASYMMETRICAL -> stringResource(R.string.template_group_asymmetrical)
+        TemplateFilter.PORTRAIT -> stringResource(R.string.template_group_portrait)
+        TemplateFilter.LANDSCAPE -> stringResource(R.string.template_group_landscape)
+    }
 
 @Composable
 private fun TemplateCard(

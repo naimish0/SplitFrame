@@ -84,7 +84,7 @@ import com.example.splitframe.domain.ImageTransform
 import com.example.splitframe.domain.TemplateKind
 import com.example.splitframe.presentation.coilModel
 import com.example.splitframe.presentation.originalCoilModel
-import com.example.splitframe.presentation.titleRes
+import com.example.splitframe.presentation.titleText
 import com.example.splitframe.ui.components.PrimaryActionButton
 import com.example.splitframe.ui.components.SecondaryActionButton
 import com.example.splitframe.ui.components.SplitFrameSection
@@ -161,7 +161,7 @@ fun EditorScreen(
         topBar = {
             SplitFrameTopAppBar(
                 title = stringResource(R.string.editor_title),
-                subtitle = stringResource(project.template.titleRes()),
+                subtitle = project.template.titleText(),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))

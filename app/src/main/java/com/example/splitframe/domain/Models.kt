@@ -8,7 +8,10 @@ data class LayoutTemplate(
     val defaultCornerRadiusDp: Float,
     val aspectRatio: Float = 1f,
     val kind: TemplateKind = TemplateKind.Standard,
-)
+    val metadata: TemplateMetadata = TemplateMetadata(),
+) {
+    val slotCount: Int get() = cells.size
+}
 
 data class LayoutCell(
     val rect: NormalizedRect,
@@ -19,6 +22,41 @@ enum class TemplateKind {
     Standard,
     BeforeAfter,
 }
+
+enum class TemplateCategory {
+    Recommended,
+    Grid,
+    Magazine,
+    Mosaic,
+    Symmetrical,
+    Asymmetrical,
+    Portrait,
+    Landscape,
+}
+
+enum class TemplateFilter {
+    ALL,
+    SYMMETRICAL,
+    ASYMMETRICAL,
+    PORTRAIT,
+    LANDSCAPE,
+}
+
+enum class TemplateOrientation {
+    Square,
+    Portrait,
+    Landscape,
+}
+
+data class TemplateMetadata(
+    val category: TemplateCategory = TemplateCategory.Recommended,
+    val previewAsset: String? = null,
+    val supportedOrientations: Set<TemplateOrientation> = setOf(
+        TemplateOrientation.Square,
+        TemplateOrientation.Portrait,
+        TemplateOrientation.Landscape,
+    ),
+)
 
 object CollageLimits {
     const val MaxImages = 15

@@ -1,12 +1,18 @@
 package com.example.splitframe.presentation
 
 import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import com.example.splitframe.R
 import com.example.splitframe.domain.LayoutTemplate
 import com.example.splitframe.domain.TemplateIds
 
 @StringRes
 fun LayoutTemplate.titleRes(): Int =
+    titleResOrNull() ?: R.string.app_name
+
+@StringRes
+fun LayoutTemplate.titleResOrNull(): Int? =
     when (id) {
         TemplateIds.SIDE_BY_SIDE -> R.string.template_side_by_side
         TemplateIds.TOP_BOTTOM -> R.string.template_top_bottom
@@ -43,11 +49,15 @@ fun LayoutTemplate.titleRes(): Int =
         TemplateIds.BALANCED_MOSAIC_7 -> R.string.template_balanced_mosaic_7
         TemplateIds.BALANCED_MOSAIC_8 -> R.string.template_balanced_mosaic_8
         TemplateIds.BALANCED_MOSAIC_9 -> R.string.template_balanced_mosaic_9
-        else -> R.string.app_name
+        else -> null
     }
 
 @StringRes
 fun LayoutTemplate.descriptionRes(): Int =
+    descriptionResOrNull() ?: R.string.app_tagline
+
+@StringRes
+fun LayoutTemplate.descriptionResOrNull(): Int? =
     when (id) {
         TemplateIds.SIDE_BY_SIDE -> R.string.template_side_by_side_desc
         TemplateIds.TOP_BOTTOM -> R.string.template_top_bottom_desc
@@ -84,5 +94,13 @@ fun LayoutTemplate.descriptionRes(): Int =
         TemplateIds.BALANCED_MOSAIC_7 -> R.string.template_balanced_mosaic_7_desc
         TemplateIds.BALANCED_MOSAIC_8 -> R.string.template_balanced_mosaic_8_desc
         TemplateIds.BALANCED_MOSAIC_9 -> R.string.template_balanced_mosaic_9_desc
-        else -> R.string.app_tagline
+        else -> null
     }
+
+@Composable
+fun LayoutTemplate.titleText(): String =
+    titleResOrNull()?.let { stringResource(it) } ?: name
+
+@Composable
+fun LayoutTemplate.descriptionText(): String =
+    descriptionResOrNull()?.let { stringResource(it) } ?: "${slotCount} image ${metadata.category.name.lowercase()} layout"
