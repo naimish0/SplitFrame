@@ -59,6 +59,8 @@ fun ExportSheet(
     state: MergeState,
     onIntent: (MergeIntent) -> Unit,
     onClose: () -> Unit,
+    onShowInterstitialAd: (() -> Unit) -> Unit = { action -> action() },
+    onShowInterstitialBeforeExport: (() -> Unit) -> Unit = { action -> action() },
 ) {
     val project = state.project ?: return
     val context = LocalContext.current
@@ -68,6 +70,7 @@ fun ExportSheet(
     var pendingShare by rememberSaveable { mutableStateOf(false) }
     var lastResultSnackbarKey by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedSize = LayoutMath.outputSizeForResolution(project.template, project.exportResolution, state.sourceDimensions)
+    val canExportImages = project.isReadyForImageExport && !state.isExporting
     val errorMessage = state.error?.let { stringResource(it) }
     val successMessage = stringResource(R.string.export_success)
     val resultMessage = when (val result = state.exportResult) {
@@ -191,7 +194,7 @@ fun ExportSheet(
                         SecondaryActionButton(
                             text = stringResource(R.string.retry),
                             onClick = { onIntent(MergeIntent.Export) },
-                            enabled = !state.isExporting,
+                            enabled = canExportImages,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
@@ -201,8 +204,8 @@ fun ExportSheet(
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PrimaryActionButton(
                         text = stringResource(R.string.save),
-                        onClick = { onIntent(MergeIntent.Export) },
-                        enabled = !state.isExporting,
+                        onClick = { onShowInterstitialBeforeExport { onIntent(MergeIntent.Export) } },
+                        enabled = canExportImages,
                         modifier = Modifier.weight(1f),
                         icon = Icons.Default.Save,
                     )
@@ -211,13 +214,17 @@ fun ExportSheet(
                         onClick = {
                             val result = state.exportResult as? ExportResult.Success
                             if (result != null) {
-                                shareImage(context, result.savedUri)
+                                onShowInterstitialAd {
+                                    shareImage(context, result.savedUri)
+                                }
                             } else {
-                                pendingShare = true
-                                onIntent(MergeIntent.Export)
+                                onShowInterstitialBeforeExport {
+                                    pendingShare = true
+                                    onIntent(MergeIntent.Export)
+                                }
                             }
                         },
-                        enabled = !state.isExporting,
+                        enabled = canExportImages,
                         modifier = Modifier.weight(1f),
                         icon = Icons.Default.Share,
                     )

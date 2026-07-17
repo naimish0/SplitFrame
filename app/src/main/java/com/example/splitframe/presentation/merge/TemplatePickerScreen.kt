@@ -46,7 +46,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.splitframe.R
-import com.example.splitframe.ads.BannerAd
 import com.example.splitframe.domain.LayoutMath
 import com.example.splitframe.domain.LayoutTemplate
 import com.example.splitframe.domain.TemplateCatalog
@@ -54,7 +53,6 @@ import com.example.splitframe.domain.TemplateFilter
 import com.example.splitframe.domain.TemplateKind
 import com.example.splitframe.presentation.descriptionRes
 import com.example.splitframe.presentation.titleRes
-import com.example.splitframe.ui.components.AdContainer
 import com.example.splitframe.ui.components.StatusMessage
 import com.example.splitframe.ui.components.StatusTone
 import com.example.splitframe.ui.components.SplitFrameTopAppBar
@@ -104,15 +102,6 @@ fun TemplatePickerScreen(
                     }
                 },
             )
-        },
-        bottomBar = {
-            AdContainer {
-                BannerAd(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                )
-            }
         },
     ) { padding ->
         LazyVerticalGrid(

@@ -7,14 +7,9 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.provider.MediaStore
-import android.util.Pair
 import androidx.annotation.OptIn
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
-import androidx.media3.common.OverlaySettings
-import androidx.media3.common.VideoCompositorSettings
-import androidx.media3.common.util.Size
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.Crop
 import androidx.media3.effect.Presentation
@@ -22,17 +17,16 @@ import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
+import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import com.example.splitframe.domain.ExportResult
 import com.example.splitframe.domain.LayoutMath
-import com.example.splitframe.domain.MediaDurationMode
 import com.example.splitframe.domain.MediaSource
 import com.example.splitframe.domain.OutputSize
 import com.example.splitframe.domain.RectPx
 import com.example.splitframe.domain.VideoClip
-import com.example.splitframe.domain.VideoFitMode
 import com.example.splitframe.domain.VideoLayoutMath
 import com.example.splitframe.domain.VideoMergeProject
 import java.io.File
@@ -80,161 +74,48 @@ class VideoExportRepository(
         project: VideoMergeProject,
         outputSize: OutputSize,
     ): Composition {
-        val frames = project.template.cells.associate { cell ->
-            cell.index to LayoutMath.cellFrame(
-                cell = cell,
-                outputWidthPx = outputSize.widthPx.toFloat(),
-                outputHeightPx = outputSize.heightPx.toFloat(),
-                spacingPx = project.spacingDp,
-            )
+        val clips = project.orderedClips
+        require(clips.size >= MinVideoMergeClipCount && clips.size == project.mediaByCell.size) {
+            "Select at least two videos before exporting."
         }
-        val sequences = mutableListOf<EditedMediaItemSequence>()
-        val outputDurationMs = VideoLayoutMath.outputDurationForMedia(project.mediaByCell, project.durationMode)
-            .coerceAtLeast(DefaultImageDurationMs)
-        val longestVideoDuration = project.clips.values.maxOfOrNull { it.trimmedDurationMs } ?: 0L
+        val outputFrame = RectPx(
+            left = 0f,
+            top = 0f,
+            right = outputSize.widthPx.toFloat(),
+            bottom = outputSize.heightPx.toFloat(),
+        )
+        val sequence = EditedMediaItemSequence.withAudioAndVideoFrom(
+            clips.map { clip -> buildMergedVideoItem(clip, outputFrame) },
+        )
 
-        project.template.cells.forEach { cell ->
-            val media = project.mediaByCell[cell.index] ?: return@forEach
-            val frame = frames.getValue(cell.index)
-            val sequenceDuration = media.visualDurationMs()
-            val shouldLoop = project.durationMode == MediaDurationMode.LOOP_SHORTER &&
-                media is MediaSource.Video &&
-                sequenceDuration in 1 until outputDurationMs
-            val exportMedia = if (project.durationMode == MediaDurationMode.STOP_AT_SHORTEST && media is MediaSource.Video) {
-                media.copy(
-                    clip = media.clip.copy(
-                        trimEndMs = (media.clip.trimStartMs + outputDurationMs).coerceAtMost(media.clip.trimEndMs),
-                    ),
-                )
-            } else {
-                media
-            }
-            val forceFiniteDuration = sequenceDuration == longestVideoDuration || media is MediaSource.Image
-            sequences += buildVisualSequence(
-                media = exportMedia,
-                frame = frame,
-                outputDurationMs = outputDurationMs,
-                looping = shouldLoop && !forceFiniteDuration,
-            )
-        }
-
-        selectedAudioClip(project)?.let { audioClip ->
-            val clippedAudio = if (project.durationMode == MediaDurationMode.STOP_AT_SHORTEST) {
-                audioClip.copy(trimEndMs = (audioClip.trimStartMs + outputDurationMs).coerceAtMost(audioClip.trimEndMs))
-            } else {
-                audioClip
-            }
-            val loopAudio = project.durationMode == MediaDurationMode.LOOP_SHORTER &&
-                clippedAudio.trimmedDurationMs in 1 until outputDurationMs
-            sequences += EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
-                .addItems(listOf(buildAudioItem(clippedAudio)))
-                .setIsLooping(loopAudio)
-                .build()
-        }
-
-        return Composition.Builder(sequences)
-            .setVideoCompositorSettings(SplitScreenCompositorSettings(outputSize, frames))
+        return Composition.Builder(listOf(sequence))
             .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL)
             .setTransmuxAudio(false)
             .setTransmuxVideo(false)
             .build()
     }
 
-    private fun buildVisualSequence(
-        media: MediaSource,
-        frame: RectPx,
-        outputDurationMs: Long,
-        looping: Boolean,
-    ): EditedMediaItemSequence {
-        val item = when (media) {
-            is MediaSource.Image -> buildImageItem(media, frame, outputDurationMs)
-            is MediaSource.Video -> buildVideoItem(media, frame)
-        }
-        return EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_VIDEO))
-            .addItems(listOf(item))
-            .setIsLooping(looping)
+    private fun buildMergedVideoItem(clip: VideoClip, outputFrame: RectPx): EditedMediaItem {
+        val media = MediaSource.Video(clip)
+        return EditedMediaItem.Builder(clip.mediaItem())
+            .setRemoveAudio(false)
+            .setRemoveVideo(false)
+            .setEffects(Effects(emptyList(), fillFrameEffects(media, outputFrame)))
             .build()
     }
 
-    private fun buildVideoItem(
+    private fun fillFrameEffects(
         media: MediaSource.Video,
         frame: RectPx,
-    ): EditedMediaItem {
-        val clip = media.clip
-        val cellWidth = frame.width.roundToInt().coerceAtLeast(2).even()
-        val cellHeight = frame.height.roundToInt().coerceAtLeast(2).even()
-        val effects = if (clip.fitMode == VideoFitMode.FILL) {
-            listOf(
-                cropEffectFor(media, frame),
-                Presentation.createForWidthAndHeight(
-                    cellWidth,
-                    cellHeight,
-                    Presentation.LAYOUT_STRETCH_TO_FIT,
-                ),
-            )
-        } else {
-            listOf(
-                Presentation.createForWidthAndHeight(
-                    cellWidth,
-                    cellHeight,
-                    Presentation.LAYOUT_SCALE_TO_FIT,
-                ),
-            )
-        }
-        return EditedMediaItem.Builder(clip.mediaItem())
-            .setRemoveAudio(true)
-            .setRemoveVideo(false)
-            .setEffects(androidx.media3.transformer.Effects(emptyList(), effects))
-            .build()
-    }
-
-    private fun buildImageItem(
-        media: MediaSource.Image,
-        frame: RectPx,
-        outputDurationMs: Long,
-    ): EditedMediaItem {
-        val cellWidth = frame.width.roundToInt().coerceAtLeast(2).even()
-        val cellHeight = frame.height.roundToInt().coerceAtLeast(2).even()
-        val effects = if (media.fitMode == VideoFitMode.FILL) {
-            listOf(
-                cropEffectFor(media, frame),
-                Presentation.createForWidthAndHeight(
-                    cellWidth,
-                    cellHeight,
-                    Presentation.LAYOUT_STRETCH_TO_FIT,
-                ),
-            )
-        } else {
-            listOf(
-                Presentation.createForWidthAndHeight(
-                    cellWidth,
-                    cellHeight,
-                    Presentation.LAYOUT_SCALE_TO_FIT,
-                ),
-            )
-        }
-        val sourceUri = media.enhancedPath ?: media.uri
-        val mediaItem = MediaItem.Builder()
-            .setUri(Uri.parse(sourceUri))
-            .setImageDurationMs(outputDurationMs)
-            .build()
-        return EditedMediaItem.Builder(mediaItem)
-            .setFrameRate(ImageFrameRate)
-            .setEffects(androidx.media3.transformer.Effects(emptyList(), effects))
-            .build()
-    }
-
-    private fun buildVideoItem(
-        clip: VideoClip,
-        frame: RectPx,
-    ): EditedMediaItem =
-        buildVideoItem(MediaSource.Video(clip), frame)
-
-    private fun buildAudioItem(clip: VideoClip): EditedMediaItem =
-        EditedMediaItem.Builder(clip.mediaItem())
-            .setRemoveAudio(false)
-            .setRemoveVideo(true)
-            .build()
+    ): List<androidx.media3.common.Effect> =
+        listOf(
+            cropEffectFor(media, frame),
+            Presentation.createForWidthAndHeight(
+                frame.width.roundToInt().coerceAtLeast(2).even(),
+                frame.height.roundToInt().coerceAtLeast(2).even(),
+                Presentation.LAYOUT_STRETCH_TO_FIT,
+            ),
+        )
 
     private fun cropEffectFor(media: MediaSource, frame: RectPx): Crop {
         val crop = LayoutMath.cropToFillSourceRect(
@@ -261,15 +142,6 @@ class VideoExportRepository(
                     .build(),
             )
             .build()
-
-    private fun selectedAudioClip(project: VideoMergeProject): VideoClip? =
-        project.primaryAudioClip
-
-    private fun MediaSource.visualDurationMs(): Long =
-        when (this) {
-            is MediaSource.Image -> DefaultImageDurationMs
-            is MediaSource.Video -> clip.trimmedDurationMs
-        }
 
     private suspend fun runTransformer(
         composition: Composition,
@@ -304,7 +176,7 @@ class VideoExportRepository(
                         .setAudioMimeType(MimeTypes.AUDIO_AAC)
                         .setEncoderFactory(
                             DefaultEncoderFactory.Builder(context)
-                                .setEnableFallback(true)
+                                .setEnableFallback(false)
                                 .build(),
                         )
                         .addListener(
@@ -391,39 +263,10 @@ class VideoExportRepository(
         return uri
     }
 
-    private class SplitScreenCompositorSettings(
-        private val outputSize: OutputSize,
-        private val frames: Map<Int, RectPx>,
-    ) : VideoCompositorSettings {
-        override fun getOutputSize(inputSizes: MutableList<Size>): Size =
-            Size(outputSize.widthPx, outputSize.heightPx)
-
-        override fun getOverlaySettings(inputId: Int, presentationTimeUs: Long): OverlaySettings {
-            val frame = frames[inputId] ?: RectPx(0f, 0f, outputSize.widthPx.toFloat(), outputSize.heightPx.toFloat())
-            return object : OverlaySettings {
-                override fun getBackgroundFrameAnchor(): Pair<Float, Float> =
-                    Pair.create(
-                        (frame.centerX / outputSize.widthPx.toFloat()) * 2f - 1f,
-                        1f - (frame.centerY / outputSize.heightPx.toFloat()) * 2f,
-                    )
-
-                override fun getOverlayFrameAnchor(): Pair<Float, Float> =
-                    Pair.create(0f, 0f)
-
-                override fun getScale(): Pair<Float, Float> =
-                    Pair.create(
-                        frame.width / outputSize.widthPx.toFloat(),
-                        frame.height / outputSize.heightPx.toFloat(),
-                    )
-            }
-        }
-    }
-
     private fun Int.even(): Int = if (this % 2 == 0) this else this + 1
 
     private companion object {
         const val ProgressPollMs = 500L
-        const val DefaultImageDurationMs = 5_000L
-        const val ImageFrameRate = 30
+        const val MinVideoMergeClipCount = 2
     }
 }

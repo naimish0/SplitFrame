@@ -75,7 +75,11 @@ data class MergeProject(
     val exportResolution: ExportResolution = ExportResolution.FHD_1080,
     val beforeAfterSlider: Float = 0.5f,
     val backgroundGradient: CollageGradient = CollageGradient.Neutral,
-)
+) {
+    val isReadyForImageExport: Boolean
+        get() = assignedImages.isNotEmpty() &&
+            template.cells.all { assignedImages.containsKey(it.index) }
+}
 
 data class CollageGradient(
     val startColor: ULong,
