@@ -38,3 +38,33 @@ interface FavoriteTemplateDao {
     @Query("DELETE FROM favorite_templates WHERE templateId = :templateId")
     suspend fun remove(templateId: String)
 }
+
+@Dao
+interface VideoProjectDao {
+    @Query("SELECT * FROM video_projects WHERE id = :id LIMIT 1")
+    suspend fun get(id: String): VideoProjectEntity?
+
+    @Query("SELECT * FROM video_projects WHERE id = :id LIMIT 1")
+    fun observe(id: String): Flow<VideoProjectEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(project: VideoProjectEntity)
+
+    @Query("DELETE FROM video_projects WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+@Dao
+interface VideoExportWorkDao {
+    @Query("SELECT * FROM video_export_work WHERE projectId = :projectId LIMIT 1")
+    fun observe(projectId: String): Flow<VideoExportWorkEntity?>
+
+    @Query("SELECT * FROM video_export_work WHERE projectId = :projectId LIMIT 1")
+    suspend fun get(projectId: String): VideoExportWorkEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(work: VideoExportWorkEntity)
+
+    @Query("DELETE FROM video_export_work WHERE projectId = :projectId")
+    suspend fun delete(projectId: String)
+}
