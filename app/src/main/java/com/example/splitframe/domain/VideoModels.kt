@@ -1,7 +1,10 @@
 package com.example.splitframe.domain
 
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 enum class VideoLayout {
     SIDE_BY_SIDE,
@@ -124,13 +127,22 @@ data class VideoMergeProject(
     val mediaCount: Int get() = mediaByCell.size
     val hasVideo: Boolean get() = mediaByCell.values.any { it is MediaSource.Video }
     val clips: Map<Int, VideoClip> get() = mediaByCell.mapNotNullValues { (_, media) -> (media as? MediaSource.Video)?.clip }
-    val orderedMedia: List<MediaSource> get() = template.cells.mapNotNull { mediaByCell[it.index] }
-    val orderedClips: List<VideoClip> get() = template.cells.mapNotNull { clips[it.index] }
+    val orderedMedia: List<MediaSource>
+        get() {
+            val templateIndexes = template.cells.map { it.index }
+            val templateMedia = templateIndexes.mapNotNull { mediaByCell[it] }
+            val extraMedia = mediaByCell
+                .filterKeys { it !in templateIndexes }
+                .toSortedMap()
+                .values
+            return templateMedia + extraMedia
+        }
+    val orderedClips: List<VideoClip> get() = orderedMedia.mapNotNull { (it as? MediaSource.Video)?.clip }
     val containsHdr: Boolean get() = clips.values.any { it.isHdr }
     val isComplete: Boolean
-        get() = template.slotCount in MixedMediaLimits.MinItems..MixedMediaLimits.MaxItems &&
-            mediaByCell.size >= MixedMediaLimits.MinItems &&
-            template.cells.all { mediaByCell.containsKey(it.index) }
+        get() = mediaByCell.size >= MixedMediaLimits.MinItems &&
+            mediaByCell.values.all { it is MediaSource.Video } &&
+            orderedClips.size == mediaByCell.size
     val primaryAudioClip: VideoClip?
         get() = primaryAudioMediaId?.let { mediaId ->
             mediaByCell.values
@@ -156,8 +168,8 @@ data class VideoExportEstimate(
 
 object MixedMediaLimits {
     const val MinItems = 2
-    const val MaxItems = 9
-    const val MaxLivePreviewVideos = 4
+    const val MaxItems = Int.MAX_VALUE
+    const val MaxLivePreviewVideos = 2
 }
 
 object MixedMediaTemplateCatalog {
@@ -172,7 +184,12 @@ object MixedMediaTemplateCatalog {
         TemplateCatalog.compatibleTemplates(templates(), mediaCount)
 
     fun byId(id: String?): LayoutTemplate? =
-        id?.let { requested -> templates().firstOrNull { it.id == requested } }
+        id?.let { requested ->
+            templates().firstOrNull { it.id == requested }
+                ?: VideoLayoutMath.sequenceTemplateCount(requested)?.let { count ->
+                    VideoLayoutMath.sequenceTemplateFor(count, VideoCanvasAspectRatio.RATIO_16_9)
+                }
+        }
 
     fun defaultForCount(mediaCount: Int): LayoutTemplate =
         compatibleTemplates(mediaCount.coerceIn(MixedMediaLimits.MinItems, MixedMediaLimits.MaxItems))
@@ -182,6 +199,43 @@ object MixedMediaTemplateCatalog {
 
 object VideoLayoutMath {
     const val MinTrimDurationMs: Long = 1_000L
+    const val EdgeToEdgeSpacingDp: Float = 0f
+
+    fun sequenceTemplateFor(
+        itemCount: Int,
+        aspectRatio: VideoCanvasAspectRatio,
+    ): LayoutTemplate {
+        val safeCount = itemCount.coerceAtLeast(MixedMediaLimits.MinItems)
+        val columns = ceil(sqrt(safeCount.toDouble())).toInt().coerceAtLeast(1)
+        val rows = ceil(safeCount / columns.toFloat()).toInt().coerceAtLeast(1)
+        return LayoutTemplate(
+            id = "$SequenceTemplateIdPrefix$safeCount",
+            name = "video_sequence_$safeCount",
+            cells = (0 until safeCount).map { index ->
+                val row = index / columns
+                val column = index % columns
+                LayoutCell(
+                    rect = NormalizedRect(
+                        x = column / columns.toFloat(),
+                        y = row / rows.toFloat(),
+                        width = 1f / columns,
+                        height = 1f / rows,
+                    ),
+                    index = index,
+                )
+            },
+            defaultSpacingDp = 0f,
+            defaultCornerRadiusDp = 0f,
+            aspectRatio = aspectRatio.ratio,
+        )
+    }
+
+    fun sequenceTemplateCount(templateId: String): Int? =
+        templateId
+            .takeIf { it.startsWith(SequenceTemplateIdPrefix) }
+            ?.removePrefix(SequenceTemplateIdPrefix)
+            ?.toIntOrNull()
+            ?.takeIf { it >= MixedMediaLimits.MinItems }
 
     fun templateFor(
         layout: VideoLayout,
@@ -239,6 +293,19 @@ object VideoLayoutMath {
         return sizeForLongEdge(aspectRatio.ratio, longEdge)
     }
 
+    fun edgeToEdgeCellFrames(
+        template: LayoutTemplate,
+        outputSize: OutputSize,
+    ): Map<Int, RectPx> =
+        template.cells.associate { cell ->
+            cell.index to RectPx(
+                left = edgeStartPx(cell.rect.x, outputSize.widthPx),
+                top = edgeStartPx(cell.rect.y, outputSize.heightPx),
+                right = edgeEndPx(cell.rect.right, outputSize.widthPx),
+                bottom = edgeEndPx(cell.rect.bottom, outputSize.heightPx),
+            )
+        }
+
     fun outputDurationMs(
         clips: Map<Int, VideoClip>,
         mode: MediaDurationMode,
@@ -253,6 +320,9 @@ object VideoLayoutMath {
             mediaByCell.values.filterIsInstance<MediaSource.Video>().map { it.clip },
             mode,
         )
+
+    fun outputDurationForMergedVideos(clips: Collection<VideoClip>): Long =
+        clips.sumOf { clip -> clip.trimmedDurationMs.coerceAtLeast(0L) }
 
     fun freezeDurationMs(clip: VideoClip, outputDurationMs: Long): Long =
         (outputDurationMs - clip.trimmedDurationMs).coerceAtLeast(0L)
@@ -307,10 +377,27 @@ object VideoLayoutMath {
             OutputSize((longEdge * aspectRatio).roundToInt().coerceAtLeast(2).even(), longEdge)
         }
 
+    private fun edgeStartPx(normalizedPosition: Float, maxPx: Int): Float {
+        val boundedMax = maxPx.coerceAtLeast(1)
+        if (normalizedPosition <= 0f) return 0f
+        return floor(normalizedPosition.coerceIn(0f, 1f) * boundedMax)
+            .coerceIn(0f, (boundedMax - 1).toFloat())
+    }
+
+    private fun edgeEndPx(normalizedPosition: Float, maxPx: Int): Float {
+        val boundedMax = maxPx.coerceAtLeast(1)
+        if (normalizedPosition >= 1f) return boundedMax.toFloat()
+        return (ceil(normalizedPosition.coerceIn(0f, 1f) * boundedMax) + InternalEdgeOverlapPx)
+            .coerceIn(1f, boundedMax.toFloat())
+    }
+
     private fun Long.floorMod(divisor: Long): Long =
         ((this % divisor) + divisor) % divisor
 
     private fun Int.even(): Int = if (this % 2 == 0) this else this + 1
+
+    private const val InternalEdgeOverlapPx = 1f
+    private const val SequenceTemplateIdPrefix = "video_sequence_"
 }
 
 fun VideoClip.toMediaSource(): MediaSource.Video =

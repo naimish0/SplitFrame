@@ -148,4 +148,31 @@ class LayoutMathTest {
         assertEquals(1920, size.widthPx)
         assertEquals(1080, size.heightPx)
     }
+
+    @Test
+    fun explicitExportResolutionsUseSelectedLongEdge() {
+        val landscapeTemplate = LayoutTemplate(
+            id = "wide",
+            name = "wide",
+            cells = listOf(LayoutCell(NormalizedRect(0f, 0f, 1f, 1f), 0)),
+            defaultSpacingDp = 0f,
+            defaultCornerRadiusDp = 0f,
+            aspectRatio = 16f / 9f,
+        )
+        val portraitTemplate = landscapeTemplate.copy(id = "portrait", aspectRatio = 9f / 16f)
+
+        mapOf(
+            ExportResolution.SD_480 to 854,
+            ExportResolution.HD_720 to 1280,
+            ExportResolution.FHD_1080 to 1920,
+            ExportResolution.QHD_1440 to 2560,
+            ExportResolution.UHD_2160 to 3840,
+        ).forEach { (resolution, longEdge) ->
+            val landscape = LayoutMath.outputSizeForResolution(landscapeTemplate, resolution, emptyMap())
+            val portrait = LayoutMath.outputSizeForResolution(portraitTemplate, resolution, emptyMap())
+
+            assertEquals(longEdge, landscape.widthPx)
+            assertEquals(longEdge, portrait.heightPx)
+        }
+    }
 }

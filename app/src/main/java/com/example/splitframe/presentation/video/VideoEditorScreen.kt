@@ -70,9 +70,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -131,8 +133,9 @@ fun VideoEditorScreen(
     val project = state.project ?: return
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    var pendingSinglePickCellIndex by remember { mutableStateOf<Int?>(null) }
     val multiPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = MixedMediaLimits.MaxItems),
+        contract = ActivityResultContracts.PickMultipleVisualMedia(),
     ) { uris ->
         if (uris.isNotEmpty()) {
             uris.forEach(context::persistMediaUriAccessIfSupported)
@@ -142,16 +145,33 @@ fun VideoEditorScreen(
     val singlePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
+        val targetCell = pendingSinglePickCellIndex ?: state.selectedClipIndex
+        pendingSinglePickCellIndex = null
         if (uri != null) {
             context.persistMediaUriAccessIfSupported(uri)
-            onIntent(VideoMergeIntent.ReplaceMedia(state.selectedClipIndex, uri.toString()))
+            onIntent(VideoMergeIntent.ReplaceMedia(targetCell, uri.toString()))
         }
     }
     val pickMixed = {
-        multiPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+        if (!state.isExporting) {
+            multiPicker.launch(
+                PickVisualMediaRequest(
+                    mediaType = ActivityResultContracts.PickVisualMedia.VideoOnly,
+                    isOrderedSelection = true,
+                ),
+            )
+        }
+    }
+    fun pickMediaForCell(cellIndex: Int) {
+        if (state.isExporting) return
+        val isTemplateCell = project.template.cells.any { it.index == cellIndex }
+        if (!isTemplateCell) return
+        pendingSinglePickCellIndex = cellIndex
+        onIntent(VideoMergeIntent.SelectClip(cellIndex))
+        singlePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
     }
     val replaceSelected = {
-        singlePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+        pickMediaForCell(state.selectedClipIndex)
     }
 
     val errorMessage = state.error?.let { stringResource(it) }
@@ -213,6 +233,7 @@ fun VideoEditorScreen(
                     FixedPreviewPane(
                         state = state,
                         onIntent = onIntent,
+                        onPickCellMedia = ::pickMediaForCell,
                         modifier = Modifier
                             .weight(1.2f)
                             .fillMaxHeight(),
@@ -228,6 +249,7 @@ fun VideoEditorScreen(
                             state = state,
                             onIntent = onIntent,
                             onPickMedia = pickMixed,
+                            onPickCellMedia = ::pickMediaForCell,
                             onReplaceSelected = replaceSelected,
                             modifier = Modifier.weight(1f),
                         )
@@ -244,6 +266,7 @@ fun VideoEditorScreen(
                     FixedPreviewPane(
                         state = state,
                         onIntent = onIntent,
+                        onPickCellMedia = ::pickMediaForCell,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 220.dp, max = 380.dp),
@@ -252,6 +275,7 @@ fun VideoEditorScreen(
                         state = state,
                         onIntent = onIntent,
                         onPickMedia = pickMixed,
+                        onPickCellMedia = ::pickMediaForCell,
                         onReplaceSelected = replaceSelected,
                         modifier = Modifier.weight(1f),
                     )
@@ -266,6 +290,7 @@ fun VideoEditorScreen(
 private fun FixedPreviewPane(
     state: VideoMergeState,
     onIntent: (VideoMergeIntent) -> Unit,
+    onPickCellMedia: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -275,6 +300,7 @@ private fun FixedPreviewPane(
         VideoPreviewCanvas(
             state = state,
             onIntent = onIntent,
+            onPickCellMedia = onPickCellMedia,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(state.project?.canvasAspectRatio?.ratio ?: 16f / 9f),
@@ -328,6 +354,7 @@ private fun PlaybackControls(
 private fun VideoPreviewCanvas(
     state: VideoMergeState,
     onIntent: (VideoMergeIntent) -> Unit,
+    onPickCellMedia: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val project = state.project ?: return
@@ -430,6 +457,8 @@ private fun VideoPreviewCanvas(
                 val media = project.mediaByCell[cell.index]
                 val selected = state.selectedClipIndex == cell.index
                 val player = (media as? MediaSource.Video)?.let { players[it.id] }
+                val canPickEmptyCell = media == null &&
+                    !state.isExporting
                 MixedMediaCell(
                     media = media,
                     player = player,
@@ -441,7 +470,13 @@ private fun VideoPreviewCanvas(
                         .height(maxHeight * cell.rect.height)
                         .padding((project.spacingDp / 2f).dp),
                     shape = RoundedCornerShape(project.cornerRadiusDp.dp),
-                    onSelect = { onIntent(VideoMergeIntent.SelectClip(cell.index)) },
+                    onSelect = {
+                        if (canPickEmptyCell) {
+                            onPickCellMedia(cell.index)
+                        } else {
+                            onIntent(VideoMergeIntent.SelectClip(cell.index))
+                        }
+                    },
                     onTransform = { onIntent(VideoMergeIntent.UpdateVideoTransform(cell.index, it, trackUndo = false)) },
                     onTransformCommit = { onIntent(VideoMergeIntent.UpdateVideoTransform(cell.index, it, trackUndo = true)) },
                 )
@@ -615,6 +650,7 @@ private fun EditorControls(
     state: VideoMergeState,
     onIntent: (VideoMergeIntent) -> Unit,
     onPickMedia: () -> Unit,
+    onPickCellMedia: (Int) -> Unit,
     onReplaceSelected: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -623,8 +659,7 @@ private fun EditorControls(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         MediaSelectionSection(state, onPickMedia)
-        TemplateSelector(state, onIntent)
-        MediaThumbnailStrip(state, onIntent)
+        MediaThumbnailStrip(state, onIntent, onPickCellMedia)
         VideoTools(state, onIntent, onReplaceSelected, onPickMedia)
         VideoExportPanel(state)
         Spacer(Modifier.height(4.dp))
@@ -637,15 +672,17 @@ private fun MediaSelectionSection(
     onPickMedia: () -> Unit,
 ) {
     val project = state.project ?: return
+    val canPickMedia = !state.isExporting
     SplitFrameSection(
         title = stringResource(R.string.video_template_title),
-        supportingText = stringResource(R.string.mixed_media_count, project.mediaCount, MixedMediaLimits.MaxItems),
+        supportingText = stringResource(R.string.mixed_media_count, project.mediaCount),
+        modifier = Modifier.clickable(enabled = canPickMedia, onClick = onPickMedia),
     ) {
         PrimaryActionButton(
             text = stringResource(R.string.video_pick_two),
             icon = Icons.Default.VideoLibrary,
             onClick = onPickMedia,
-            enabled = !state.isExporting && project.mediaCount < MixedMediaLimits.MaxItems,
+            enabled = canPickMedia,
             modifier = Modifier.fillMaxWidth(),
         )
         if (state.status == VideoEditorStatus.ReadingMetadata) {
@@ -710,6 +747,7 @@ private fun TemplateChip(
 private fun MediaThumbnailStrip(
     state: VideoMergeState,
     onIntent: (VideoMergeIntent) -> Unit,
+    onPickCellMedia: (Int) -> Unit,
 ) {
     val project = state.project ?: return
     Row(
@@ -720,12 +758,20 @@ private fun MediaThumbnailStrip(
     ) {
         project.template.cells.forEach { cell ->
             val media = project.mediaByCell[cell.index]
+            val canPickEmptyCell = media == null &&
+                !state.isExporting
             Card(
                 modifier = Modifier
                     .width(82.dp)
                     .height(64.dp)
                     .semantics { selected = state.selectedClipIndex == cell.index }
-                    .clickable { onIntent(VideoMergeIntent.SelectClip(cell.index)) },
+                    .clickable {
+                        if (canPickEmptyCell) {
+                            onPickCellMedia(cell.index)
+                        } else {
+                            onIntent(VideoMergeIntent.SelectClip(cell.index))
+                        }
+                    },
                 border = BorderStroke(
                     width = if (state.selectedClipIndex == cell.index) 2.dp else 1.dp,
                     color = if (state.selectedClipIndex == cell.index) {
@@ -797,10 +843,9 @@ private fun VideoTools(
             SecondaryActionButton(
                 text = stringResource(R.string.video_pick_two),
                 onClick = onPickMedia,
-                enabled = project.mediaCount < MixedMediaLimits.MaxItems && !state.isExporting,
+                enabled = !state.isExporting,
             )
         }
-        AudioControls(project = project, onIntent = onIntent)
         DurationAndResolutionControls(project = project, onIntent = onIntent)
         SelectedMediaControls(state = state, onIntent = onIntent)
     }
@@ -858,24 +903,6 @@ private fun DurationAndResolutionControls(
     onIntent: (VideoMergeIntent) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = stringResource(R.string.video_duration_mode), style = MaterialTheme.typography.titleSmall)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = project.durationMode == MediaDurationMode.LOOP_SHORTER,
-                onClick = { onIntent(VideoMergeIntent.SelectDurationMode(MediaDurationMode.LOOP_SHORTER)) },
-                label = { Text(stringResource(R.string.video_duration_loop)) },
-            )
-            FilterChip(
-                selected = project.durationMode == MediaDurationMode.FREEZE_SHORTER,
-                onClick = { onIntent(VideoMergeIntent.SelectDurationMode(MediaDurationMode.FREEZE_SHORTER)) },
-                label = { Text(stringResource(R.string.video_duration_longest)) },
-            )
-            FilterChip(
-                selected = project.durationMode == MediaDurationMode.STOP_AT_SHORTEST,
-                onClick = { onIntent(VideoMergeIntent.SelectDurationMode(MediaDurationMode.STOP_AT_SHORTEST)) },
-                label = { Text(stringResource(R.string.video_duration_shortest)) },
-            )
-        }
         Text(text = stringResource(R.string.export_resolution), style = MaterialTheme.typography.titleSmall)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ExportResolution.entries.forEach { resolution ->
@@ -1031,7 +1058,7 @@ private fun TransformControls(
 private fun VideoExportPanel(state: VideoMergeState) {
     val project = state.project ?: return
     val outputSize = VideoLayoutMath.outputSizeForMedia(project.canvasAspectRatio, project.exportResolution, project.mediaByCell)
-    val outputDurationMs = VideoLayoutMath.outputDurationForMedia(project.mediaByCell, project.durationMode)
+    val outputDurationMs = VideoLayoutMath.outputDurationForMergedVideos(project.orderedClips)
     val estimateBytes = VideoLayoutMath.estimateMp4Bytes(outputSize, outputDurationMs)
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1085,7 +1112,7 @@ private fun PersistentExportAction(
             text = stringResource(R.string.save),
             icon = Icons.Default.FileDownload,
             onClick = { onIntent(VideoMergeIntent.StartExport) },
-            enabled = project.isComplete && project.hasVideo,
+            enabled = project.isComplete,
             modifier = Modifier.fillMaxWidth(),
         )
     }

@@ -53,7 +53,7 @@ class VideoMergeViewModel(
 
     init {
         viewModelScope.launch {
-            val project = videoProjectStore.getOrCreate(null)
+            val project = videoProjectStore.getOrCreate(null).asVideoMergeProject()
             _state.update {
                 it.copy(
                     project = project,
@@ -86,7 +86,15 @@ class VideoMergeViewModel(
             is VideoMergeAction.UpdateTrim -> updateTrim(action.cellIndex, action.startMs, action.endMs)
             is VideoMergeAction.UpdateVideoTransform -> updateTransform(action.cellIndex, action.transform, action.trackUndo)
             is VideoMergeAction.ResetVideoTransform -> updateTransform(action.cellIndex, ImageTransform.Default, trackUndo = true)
-            is VideoMergeAction.SelectCanvasAspectRatio -> updateProject { it.copy(canvasAspectRatio = action.aspectRatio) }
+            is VideoMergeAction.SelectCanvasAspectRatio -> updateProject { project ->
+                val videos = project.orderedVideoMedia()
+                val template = VideoLayoutMath.sequenceTemplateFor(videos.size, action.aspectRatio)
+                project.copy(
+                    canvasAspectRatio = action.aspectRatio,
+                    template = template,
+                    mediaByCell = videos.toCellMap(template),
+                )
+            }
             is VideoMergeAction.SelectPrimaryAudio -> updateProject { project ->
                 project.copy(primaryAudioMediaId = availableAudioMediaId(project, action.mediaId))
             }
@@ -116,12 +124,7 @@ class VideoMergeViewModel(
         if (distinct.size < uris.size) {
             reduce(VideoMergeResultEvent.Failed(R.string.media_duplicate_skipped))
         }
-        val remainingSlots = (MixedMediaLimits.MaxItems - current.mediaByCell.size).coerceAtLeast(0)
-        if (remainingSlots == 0) {
-            reduce(VideoMergeResultEvent.Failed(R.string.media_selection_full))
-            return
-        }
-        readAndAppend(distinct.take(remainingSlots))
+        readAndAppend(distinct)
     }
 
     private fun readAndAppend(uris: List<String>) {
@@ -131,21 +134,29 @@ class VideoMergeViewModel(
             reduce(VideoMergeResultEvent.MetadataReadingStarted)
             val current = _state.value.project ?: return@launch
             val results = readMetadata(uris)
-            val validMedia = results.mapNotNull { (_, result) -> (result as? MixedMediaMetadataResult.Valid)?.media }
+            val validMedia = results.mapNotNull { (_, result) ->
+                ((result as? MixedMediaMetadataResult.Valid)?.media as? MediaSource.Video)
+            }
+            val containsNonVideo = results.any { (_, result) ->
+                result is MixedMediaMetadataResult.Valid && result.media !is MediaSource.Video
+            }
             val firstFailure = results.firstNotNullOfOrNull { (_, result) ->
                 (result as? MixedMediaMetadataResult.Unsupported)?.failure
             }
             if (validMedia.isNotEmpty()) {
-                val ordered = current.orderedMedia + validMedia
-                val targetTemplate = current.template.takeIf { it.slotCount >= ordered.size }
-                    ?: MixedMediaTemplateCatalog.defaultForCount(ordered.size)
+                val ordered = current.orderedVideoMedia() + validMedia
+                val targetTemplate = VideoLayoutMath.sequenceTemplateFor(ordered.size, current.canvasAspectRatio)
                 val updated = current.copy(
                     template = targetTemplate,
                     mediaByCell = ordered.toCellMap(targetTemplate),
                     selectedCellIndex = targetTemplate.cells.firstOrNull()?.index ?: 0,
+                    spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
                 ).withAvailableAudio()
                 commitProjectChange(updated)
                 reduce(VideoMergeResultEvent.PreviewPreparing)
+            }
+            if (containsNonVideo) {
+                reduce(VideoMergeResultEvent.Failed(R.string.video_only_required))
             }
             firstFailure?.let { reduce(VideoMergeResultEvent.Failed(it.toMessageRes())) }
         }
@@ -175,7 +186,12 @@ class VideoMergeViewModel(
                 }
                 when (val result = metadata.second) {
                     is MixedMediaMetadataResult.Valid -> {
-                        updated = updated.copy(mediaByCell = updated.mediaByCell + (cell to result.media))
+                        val media = result.media as? MediaSource.Video
+                        if (media == null) {
+                            firstFailure = firstFailure ?: MediaMetadataFailure.MissingVideoTrack
+                        } else {
+                            updated = updated.copy(mediaByCell = updated.mediaByCell + (cell to media))
+                        }
                     }
                     is MixedMediaMetadataResult.Unsupported -> firstFailure = firstFailure ?: result.failure
                 }
@@ -196,10 +212,19 @@ class VideoMergeViewModel(
     private fun removeMedia(cellIndex: Int) {
         val project = _state.value.project ?: return
         if (!project.mediaByCell.containsKey(cellIndex)) return
-        val updatedMedia = project.mediaByCell - cellIndex
-        val selected = updatedMedia.keys.sorted().firstOrNull() ?: cellIndex
+        val updatedVideos = project.orderedVideoMedia()
+            .filterIndexed { index, _ -> index != project.orderedCellIndexPosition(cellIndex) }
+        val template = VideoLayoutMath.sequenceTemplateFor(updatedVideos.size, project.canvasAspectRatio)
+        val selected = updatedVideos.indices.toList()
+            .closestTo(cellIndex)
+            .takeIf { updatedVideos.isNotEmpty() }
+            ?: 0
         commitProjectChange(
-            project.copy(mediaByCell = updatedMedia, selectedCellIndex = selected)
+            project.copy(
+                template = template,
+                mediaByCell = updatedVideos.toCellMap(template),
+                selectedCellIndex = selected,
+            )
                 .withAvailableAudio(),
         )
         reduce(VideoMergeResultEvent.SelectedClipChanged(selected))
@@ -208,7 +233,10 @@ class VideoMergeViewModel(
     private fun selectCell(cellIndex: Int) {
         val project = _state.value.project ?: return
         val safeCell = project.template.cells.map { it.index }.closestTo(cellIndex)
-        val updated = project.copy(selectedCellIndex = safeCell)
+        val updated = project.copy(
+            selectedCellIndex = safeCell,
+            spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
+        )
         reduce(VideoMergeResultEvent.SelectedClipChanged(safeCell))
         viewModelScope.launch { videoProjectStore.save(updated) }
         _state.update { it.copy(project = updated) }
@@ -225,7 +253,7 @@ class VideoMergeViewModel(
             template = template,
             mediaByCell = project.orderedMedia.toCellMap(template),
             selectedCellIndex = template.cells.firstOrNull()?.index ?: project.selectedCellIndex,
-            spacingDp = project.spacingDp.takeUnless { it == 0f } ?: template.defaultSpacingDp,
+            spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
             cornerRadiusDp = project.cornerRadiusDp.takeUnless { it == 0f } ?: template.defaultCornerRadiusDp,
         ).withAvailableAudio()
         commitProjectChange(updated)
@@ -244,6 +272,7 @@ class VideoMergeViewModel(
                 template = template,
                 mediaByCell = project.orderedMedia.toCellMap(template),
                 selectedCellIndex = template.cells.firstOrNull()?.index ?: 0,
+                spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
             ).withAvailableAudio(),
         )
         reduce(VideoMergeResultEvent.PreviewPreparing)
@@ -264,7 +293,15 @@ class VideoMergeViewModel(
 
     private fun autoArrange() {
         val project = _state.value.project ?: return
-        commitProjectChange(project.copy(mediaByCell = project.orderedMedia.toCellMap(project.template)).withAvailableAudio())
+        val ordered = project.orderedVideoMedia()
+        val template = VideoLayoutMath.sequenceTemplateFor(ordered.size, project.canvasAspectRatio)
+        commitProjectChange(
+            project.copy(
+                template = template,
+                mediaByCell = ordered.toCellMap(template),
+                selectedCellIndex = project.selectedCellIndex?.coerceIn(0, (ordered.size - 1).coerceAtLeast(0)),
+            ).withAvailableAudio(),
+        )
     }
 
     private fun updateTrim(cellIndex: Int, startMs: Long, endMs: Long) {
@@ -309,30 +346,31 @@ class VideoMergeViewModel(
     }
 
     private fun commitProjectChange(project: VideoMergeProject, trackUndo: Boolean = true) {
+        val edgeToEdgeProject = project.copy(spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp)
         val current = _state.value.project
-        if (trackUndo && current != null && current != project) {
+        if (trackUndo && current != null && current != edgeToEdgeProject) {
             undoStack.addLast(current)
             while (undoStack.size > MaxUndoDepth) undoStack.removeFirst()
             redoStack.clear()
         }
-        reduce(VideoMergeResultEvent.ProjectChanged(project))
+        reduce(VideoMergeResultEvent.ProjectChanged(edgeToEdgeProject))
         viewModelScope.launch {
-            videoProjectStore.save(project)
+            videoProjectStore.save(edgeToEdgeProject)
         }
     }
 
     private fun undoEdit() {
         val current = _state.value.project ?: return
-        val previous = undoStack.removeLastOrNull() ?: return
-        redoStack.addLast(current)
+        val previous = undoStack.removeLastOrNull()?.copy(spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp) ?: return
+        redoStack.addLast(current.copy(spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp))
         reduce(VideoMergeResultEvent.ProjectChanged(previous))
         viewModelScope.launch { videoProjectStore.save(previous) }
     }
 
     private fun redoEdit() {
         val current = _state.value.project ?: return
-        val next = redoStack.removeLastOrNull() ?: return
-        undoStack.addLast(current)
+        val next = redoStack.removeLastOrNull()?.copy(spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp) ?: return
+        undoStack.addLast(current.copy(spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp))
         reduce(VideoMergeResultEvent.ProjectChanged(next))
         viewModelScope.launch { videoProjectStore.save(next) }
     }
@@ -351,10 +389,6 @@ class VideoMergeViewModel(
         if (_state.value.isExporting) return
         if (!project.isComplete) {
             reduce(VideoMergeResultEvent.Failed(R.string.video_missing_clips))
-            return
-        }
-        if (!project.hasVideo) {
-            reduce(VideoMergeResultEvent.Failed(R.string.mixed_media_image_only_static_export))
             return
         }
         if (project.clips.values.any { !it.hasValidTrim }) {
@@ -379,7 +413,7 @@ class VideoMergeViewModel(
                     updatedAtMillis = System.currentTimeMillis(),
                 ),
             )
-            workManager.enqueueUniqueWork(workName, ExistingWorkPolicy.KEEP, request)
+            workManager.enqueueUniqueWork(workName, ExistingWorkPolicy.REPLACE, request)
             reduce(VideoMergeResultEvent.ExportQueued(request.id.toString()))
         }
     }
@@ -481,6 +515,34 @@ class VideoMergeViewModel(
 
     private fun VideoMergeProject.withAvailableAudio(): VideoMergeProject =
         copy(primaryAudioMediaId = availableAudioMediaId(this, primaryAudioMediaId))
+
+    private fun VideoMergeProject.asVideoMergeProject(): VideoMergeProject {
+        val videos = orderedVideoMedia()
+        val targetTemplate = VideoLayoutMath.sequenceTemplateFor(videos.size, canvasAspectRatio)
+        return copy(
+            template = targetTemplate,
+            mediaByCell = videos.toCellMap(targetTemplate),
+            selectedCellIndex = targetTemplate.cells.firstOrNull()?.index ?: 0,
+            spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
+            cornerRadiusDp = 0f,
+        ).withAvailableAudio()
+    }
+
+    private fun VideoMergeProject.orderedVideoMedia(): List<MediaSource.Video> {
+        val templateOrdered = template.cells.mapNotNull { cell -> mediaByCell[cell.index] as? MediaSource.Video }
+        return templateOrdered.ifEmpty {
+            mediaByCell.entries
+                .sortedBy { it.key }
+                .mapNotNull { (_, media) -> media as? MediaSource.Video }
+        }
+    }
+
+    private fun VideoMergeProject.orderedCellIndexPosition(cellIndex: Int): Int {
+        val templateIndexes = template.cells.map { it.index }
+        val position = templateIndexes.indexOf(cellIndex)
+        if (position >= 0) return position
+        return mediaByCell.keys.sorted().indexOf(cellIndex).takeIf { it >= 0 } ?: cellIndex
+    }
 
     private fun availableAudioMediaId(project: VideoMergeProject, requestedMediaId: String?): String? {
         if (requestedMediaId == null) return null

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -27,8 +26,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.splitframe.R
-import com.example.splitframe.ads.BannerAd
-import com.example.splitframe.ui.components.AdContainer
+import com.example.splitframe.ads.NativeAdvancedAd
 import com.example.splitframe.ui.components.SplitFrameTopAppBar
 
 @Composable
@@ -42,16 +40,6 @@ fun ModeSelectionScreen(
                 title = stringResource(R.string.app_name),
                 subtitle = stringResource(R.string.app_tagline),
             )
-        },
-        bottomBar = {
-            AdContainer {
-                BannerAd(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .padding(bottom = 2.dp),
-                )
-            }
         },
     ) { padding ->
         LazyColumn(
@@ -70,6 +58,9 @@ fun ModeSelectionScreen(
                 )
             }
             item {
+                HomeNativeAd()
+            }
+            item {
                 ModeCard(
                     title = stringResource(R.string.mode_video_split),
                     description = stringResource(R.string.mode_video_split_desc),
@@ -77,8 +68,23 @@ fun ModeSelectionScreen(
                     onClick = onOpenVideoSplit,
                 )
             }
+            item {
+                HomeNativeAd()
+            }
         }
     }
+}
+
+@Composable
+private fun HomeNativeAd() {
+    NativeAdvancedAd(
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        supportingColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        outlineColor = MaterialTheme.colorScheme.outlineVariant,
+        primaryColor = MaterialTheme.colorScheme.primary,
+        onPrimaryColor = MaterialTheme.colorScheme.onPrimary,
+    )
 }
 
 @Composable

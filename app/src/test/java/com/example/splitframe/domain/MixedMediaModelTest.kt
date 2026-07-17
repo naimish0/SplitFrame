@@ -8,31 +8,39 @@ import org.junit.Test
 
 class MixedMediaModelTest {
     @Test
-    fun templateCatalogHasExactTemplatesForTwoThroughNineItems() {
-        (2..9).forEach { count ->
-            val templates = MixedMediaTemplateCatalog.compatibleTemplates(count)
+    fun templateCatalogIncludesMultiVideoMergeLayouts() {
+        val templates = MixedMediaTemplateCatalog.compatibleTemplates(2)
 
-            assertTrue("Expected templates for $count items", templates.isNotEmpty())
-            assertTrue(templates.all { it.slotCount == count })
-        }
+        assertTrue("Expected templates for video merge", templates.isNotEmpty())
+        assertTrue(templates.all { it.slotCount == 2 })
+        assertTrue(MixedMediaTemplateCatalog.compatibleTemplates(3).isNotEmpty())
     }
 
     @Test
-    fun projectCompletionRequiresEveryTemplateCellToBeFilled() {
-        val template = MixedMediaTemplateCatalog.defaultForCount(3)
+    fun projectCompletionRequiresAtLeastTwoVideos() {
+        val template = VideoLayoutMath.sequenceTemplateFor(3, VideoCanvasAspectRatio.RATIO_16_9)
         val incomplete = VideoMergeProject(
             id = "mixed",
             template = template,
             mediaByCell = mapOf(
-                template.cells[0].index to image("a"),
-                template.cells[1].index to video("b", duration = 5_000L),
+                template.cells[0].index to video("a", duration = 5_000L),
             ),
         )
-        val complete = incomplete.copy(
-            mediaByCell = incomplete.mediaByCell + (template.cells[2].index to image("c")),
+        val mixed = incomplete.copy(
+            mediaByCell = incomplete.mediaByCell + (template.cells[1].index to image("b")),
+        )
+        val complete = VideoMergeProject(
+            id = "complete",
+            template = template,
+            mediaByCell = mapOf(
+                template.cells[0].index to video("a", duration = 5_000L),
+                template.cells[1].index to video("b", duration = 7_000L),
+                template.cells[2].index to video("c", duration = 9_000L),
+            ),
         )
 
         assertFalse(incomplete.isComplete)
+        assertFalse(mixed.isComplete)
         assertTrue(complete.isComplete)
     }
 
@@ -62,6 +70,17 @@ class MixedMediaModelTest {
 
         assertEquals(8_000L, VideoLayoutMath.outputDurationForMedia(media, MediaDurationMode.LOOP_SHORTER))
         assertEquals(3_000L, VideoLayoutMath.outputDurationForMedia(media, MediaDurationMode.STOP_AT_SHORTEST))
+    }
+
+    @Test
+    fun mergedVideoDurationIsSumOfAllTrimmedClips() {
+        val clips = listOf(
+            clip(id = "first", duration = 10_000L, trimStart = 1_000L, trimEnd = 4_000L),
+            clip(id = "second", duration = 10_000L, trimStart = 2_000L, trimEnd = 8_000L),
+            clip(id = "third", duration = 10_000L, trimStart = 0L, trimEnd = 5_000L),
+        )
+
+        assertEquals(14_000L, VideoLayoutMath.outputDurationForMergedVideos(clips))
     }
 
     @Test

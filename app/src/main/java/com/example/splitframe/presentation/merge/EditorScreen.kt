@@ -98,6 +98,8 @@ fun EditorScreen(
     state: MergeState,
     onIntent: (MergeIntent) -> Unit,
     onBack: () -> Unit,
+    onShowInterstitialAd: (() -> Unit) -> Unit = { action -> action() },
+    onShowInterstitialBeforeExport: (() -> Unit) -> Unit = { action -> action() },
 ) {
     val project = state.project ?: return
     val context = LocalContext.current
@@ -107,6 +109,7 @@ fun EditorScreen(
     var showResetConfirm by rememberSaveable { mutableStateOf(false) }
     var isPickerOpen by rememberSaveable { mutableStateOf(false) }
     val selectionLimitReached = project.assignedImages.size >= CollageLimits.MaxImages
+    val canExportImages = project.isReadyForImageExport && !state.isExporting
 
     val singlePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -181,7 +184,7 @@ fun EditorScreen(
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.reset))
                     }
-                    IconButton(onClick = { showExportSheet = true }, enabled = !state.isExporting) {
+                    IconButton(onClick = { showExportSheet = true }, enabled = canExportImages) {
                         Icon(Icons.Default.FileDownload, contentDescription = stringResource(R.string.export))
                     }
                 },
@@ -240,6 +243,7 @@ fun EditorScreen(
                                 state = state,
                                 selectedCell = selectedCell,
                                 onExport = { showExportSheet = true },
+                                canExport = canExportImages,
                                 onIntent = onIntent,
                             )
                         }
@@ -275,6 +279,7 @@ fun EditorScreen(
                             state = state,
                             selectedCell = selectedCell,
                             onExport = { showExportSheet = true },
+                            canExport = canExportImages,
                             onIntent = onIntent,
                         )
                     }
@@ -313,6 +318,8 @@ fun EditorScreen(
                 state = state,
                 onIntent = onIntent,
                 onClose = { showExportSheet = false },
+                onShowInterstitialAd = onShowInterstitialAd,
+                onShowInterstitialBeforeExport = onShowInterstitialBeforeExport,
             )
         }
     }
@@ -579,6 +586,7 @@ private fun EditorTools(
     state: MergeState,
     selectedCell: Int,
     onExport: () -> Unit,
+    canExport: Boolean,
     onIntent: (MergeIntent) -> Unit,
 ) {
     val project = state.project ?: return
@@ -648,7 +656,7 @@ private fun EditorTools(
             PrimaryActionButton(
                 text = stringResource(R.string.export),
                 onClick = onExport,
-                enabled = !state.isExporting,
+                enabled = canExport,
                 icon = Icons.Default.FileDownload,
                 modifier = Modifier.fillMaxWidth(),
             )

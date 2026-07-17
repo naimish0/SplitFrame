@@ -66,7 +66,7 @@ class VideoProjectStore(
             exportResolution = exportResolution.name,
             primaryAudioSource = legacyAudioSource().name,
             durationMode = durationMode.name,
-            spacingDp = spacingDp,
+            spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
             cornerRadiusDp = cornerRadiusDp,
             backgroundColor = backgroundColor.toLong(),
             updatedAtMillis = System.currentTimeMillis(),
@@ -87,8 +87,10 @@ class VideoProjectStore(
                 clip1?.decodeClip()?.let { put(1, MediaSource.Video(it)) }
             }
         }
-        val template = MixedMediaTemplateCatalog.byId(templateId)
-            ?: VideoLayoutMath.templateFor(legacyLayout, aspectRatio)
+        val template = VideoLayoutMath.sequenceTemplateCount(templateId.orEmpty())
+            ?.let { count -> VideoLayoutMath.sequenceTemplateFor(maxOf(count, decodedMedia.size), aspectRatio) }
+            ?: MixedMediaTemplateCatalog.byId(templateId)
+            ?: VideoLayoutMath.sequenceTemplateFor(decodedMedia.size, aspectRatio)
         return VideoMergeProject(
             id = id,
             mediaByCell = decodedMedia,
@@ -98,7 +100,7 @@ class VideoProjectStore(
             exportResolution = enumValueOrDefault(exportResolution, ExportResolution.FHD_1080),
             primaryAudioMediaId = primaryAudioMediaId ?: legacyAudioMediaId(primaryAudioSource, decodedMedia),
             durationMode = durationMode.toDurationMode(),
-            spacingDp = spacingDp,
+            spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
             cornerRadiusDp = cornerRadiusDp,
             backgroundColor = backgroundColor.toULong(),
         )

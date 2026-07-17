@@ -278,8 +278,7 @@ class MergeViewModel(
     private fun export() {
         if (_state.value.isExporting || exportJob?.isActive == true) return
         val project = _state.value.project ?: return
-        val requiredCells = project.template.cells.map { it.index }.toSet()
-        if (!project.assignedImages.keys.containsAll(requiredCells)) {
+        if (!project.isReadyForImageExport) {
             reduce(MergeResultEvent.Failed(R.string.missing_images))
             return
         }

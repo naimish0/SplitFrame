@@ -26,6 +26,44 @@ class VideoLayoutMathTest {
     }
 
     @Test
+    fun edgeToEdgeExportFramesHaveNoGapBetweenCells() {
+        val sideBySide = VideoLayoutMath.templateFor(VideoLayout.SIDE_BY_SIDE, VideoCanvasAspectRatio.RATIO_16_9)
+        val topBottom = VideoLayoutMath.templateFor(VideoLayout.TOP_BOTTOM, VideoCanvasAspectRatio.RATIO_16_9)
+
+        val sideBySideFrames = VideoLayoutMath.edgeToEdgeCellFrames(sideBySide, OutputSize(1920, 1080))
+        val topBottomFrames = VideoLayoutMath.edgeToEdgeCellFrames(topBottom, OutputSize(1920, 1080))
+        val left = sideBySideFrames.getValue(0)
+        val right = sideBySideFrames.getValue(1)
+        val top = topBottomFrames.getValue(0)
+        val bottom = topBottomFrames.getValue(1)
+
+        assertEquals(0f, left.left, 0.001f)
+        assertTrue(left.right > right.left)
+        assertEquals(1920f, right.right, 0.001f)
+        assertEquals(0f, top.top, 0.001f)
+        assertTrue(top.bottom > bottom.top)
+        assertEquals(1080f, bottom.bottom, 0.001f)
+    }
+
+    @Test
+    fun edgeToEdgeExportFramesOverlapFractionalInternalEdges() {
+        val template = TemplateRepository().templates().first { it.id == TemplateIds.MOSAIC_5 }
+        val frames = VideoLayoutMath.edgeToEdgeCellFrames(template, OutputSize(1001, 1001))
+        val large = frames.getValue(0)
+        val rightColumnTop = frames.getValue(1)
+        val bottomLeft = frames.getValue(3)
+        val bottomRight = frames.getValue(4)
+
+        assertEquals(0f, large.left, 0.001f)
+        assertEquals(0f, large.top, 0.001f)
+        assertTrue(large.right > rightColumnTop.left)
+        assertTrue(large.bottom > bottomLeft.top)
+        assertTrue(bottomLeft.right > bottomRight.left)
+        assertEquals(1001f, bottomRight.right, 0.001f)
+        assertEquals(1001f, bottomRight.bottom, 0.001f)
+    }
+
+    @Test
     fun outputResolutionPreservesLandscapeAspectRatio() {
         val size = VideoLayoutMath.outputSizeForResolution(
             aspectRatio = VideoCanvasAspectRatio.RATIO_16_9,
@@ -47,6 +85,31 @@ class VideoLayoutMathTest {
 
         assertEquals(1080, size.widthPx)
         assertEquals(1920, size.heightPx)
+    }
+
+    @Test
+    fun explicitVideoExportResolutionsUseSelectedLongEdge() {
+        mapOf(
+            ExportResolution.SD_480 to 854,
+            ExportResolution.HD_720 to 1280,
+            ExportResolution.FHD_1080 to 1920,
+            ExportResolution.QHD_1440 to 2560,
+            ExportResolution.UHD_2160 to 3840,
+        ).forEach { (resolution, longEdge) ->
+            val landscape = VideoLayoutMath.outputSizeForMedia(
+                aspectRatio = VideoCanvasAspectRatio.RATIO_16_9,
+                resolution = resolution,
+                mediaByCell = emptyMap(),
+            )
+            val portrait = VideoLayoutMath.outputSizeForMedia(
+                aspectRatio = VideoCanvasAspectRatio.RATIO_9_16,
+                resolution = resolution,
+                mediaByCell = emptyMap(),
+            )
+
+            assertEquals(longEdge, landscape.widthPx)
+            assertEquals(longEdge, portrait.heightPx)
+        }
     }
 
     @Test
