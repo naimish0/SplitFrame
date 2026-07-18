@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.splitframe.BuildConfig
 import com.example.splitframe.R
 import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdLoader
@@ -47,22 +48,28 @@ fun NativeAdvancedAd(
 
     DisposableEffect(context) {
         var currentAd: NativeAd? = null
-        val adLoader = AdLoader.Builder(context, SplitFrameAdManager.TestNativeAdvancedAdUnitId)
+        var isDisposed = false
+        val adLoader = AdLoader.Builder(context, BuildConfig.NATIVE_AD_UNIT_ID)
             .forNativeAd { ad ->
-                currentAd?.destroy()
-                currentAd = ad
-                nativeAd = ad
+                if (isDisposed) {
+                    ad.destroy()
+                } else {
+                    currentAd?.destroy()
+                    currentAd = ad
+                    nativeAd = ad
+                }
             }
             .withAdListener(
                 object : AdListener() {
                     override fun onAdFailedToLoad(error: LoadAdError) {
-                        nativeAd = null
+                        if (!isDisposed) nativeAd = null
                     }
                 },
             )
             .build()
         adLoader.loadAd(AdRequest.Builder().build())
         onDispose {
+            isDisposed = true
             currentAd?.destroy()
             nativeAd = null
         }

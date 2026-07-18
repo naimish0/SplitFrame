@@ -84,7 +84,6 @@ fun SingleImageScreen(
     onIntent: (SingleImageIntent) -> Unit,
     onBack: () -> Unit,
     onUseInCollage: (ImageSource.LocalUri) -> Unit,
-    onShowInterstitialAd: (() -> Unit) -> Unit = { action -> action() },
 ) {
     val context = LocalContext.current
     var isPickerOpen by rememberSaveable { mutableStateOf(false) }
@@ -143,7 +142,7 @@ fun SingleImageScreen(
                 state.result?.let { result ->
                     SecondaryActionButton(
                         text = stringResource(R.string.share),
-                        onClick = { onShowInterstitialAd { context.shareImage(result.savedUri) } },
+                        onClick = { context.shareImage(result.savedUri) },
                         icon = Icons.Default.Share,
                         enabled = !state.isProcessing,
                     )
@@ -184,7 +183,7 @@ fun SingleImageScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PrimaryActionButton(
                     text = stringResource(R.string.save),
-                    onClick = { onShowInterstitialAd { onIntent(SingleImageIntent.Process) } },
+                    onClick = { onIntent(SingleImageIntent.Process) },
                     enabled = !state.isProcessing && state.planResult is SingleImagePlanResult.Valid,
                     icon = Icons.Default.Save,
                     modifier = Modifier.weight(1f),
