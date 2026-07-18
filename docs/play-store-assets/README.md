@@ -1,8 +1,6 @@
 # SplitFrame Play Store Release Assets
 
-Package: `com.example.splitframe`
-
-> The package name is still a template-style identifier. Confirm or replace it with the publisher's permanent, owned namespace before the first Play upload; a published package name cannot be changed in place.
+Package: `com.rameshta.splitframe`
 
 ## Upload Files
 
