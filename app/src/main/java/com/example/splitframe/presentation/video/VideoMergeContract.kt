@@ -9,7 +9,6 @@ import com.example.splitframe.domain.MediaSource
 import com.example.splitframe.domain.VideoCanvasAspectRatio
 import com.example.splitframe.domain.VideoClip
 import com.example.splitframe.domain.VideoFitMode
-import com.example.splitframe.domain.VideoLayout
 import com.example.splitframe.domain.VideoMergeProject
 
 sealed interface VideoMergeIntent {
@@ -21,8 +20,6 @@ sealed interface VideoMergeIntent {
     data class ReplaceVideo(val cellIndex: Int, val uri: String) : VideoMergeIntent
     data class RemoveVideo(val cellIndex: Int) : VideoMergeIntent
     data class SelectClip(val cellIndex: Int) : VideoMergeIntent
-    data class SelectTemplate(val templateId: String) : VideoMergeIntent
-    data class SelectLayout(val layout: VideoLayout) : VideoMergeIntent
     data object SwapVideos : VideoMergeIntent
     data class SwapCells(val firstCellIndex: Int, val secondCellIndex: Int) : VideoMergeIntent
     data object AutoArrange : VideoMergeIntent
@@ -59,8 +56,6 @@ sealed interface VideoMergeAction {
     data class ReplaceMedia(val cellIndex: Int, val uri: String) : VideoMergeAction
     data class RemoveMedia(val cellIndex: Int) : VideoMergeAction
     data class SelectClip(val cellIndex: Int) : VideoMergeAction
-    data class SelectTemplate(val templateId: String) : VideoMergeAction
-    data class SelectLayout(val layout: VideoLayout) : VideoMergeAction
     data object SwapVideos : VideoMergeAction
     data class SwapCells(val firstCellIndex: Int, val secondCellIndex: Int) : VideoMergeAction
     data object AutoArrange : VideoMergeAction

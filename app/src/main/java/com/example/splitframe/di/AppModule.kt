@@ -30,6 +30,7 @@ val appModule = module {
         )
             .addMigrations(SplitFrameDatabase.Migration1To2)
             .addMigrations(SplitFrameDatabase.Migration2To3)
+            .addMigrations(SplitFrameDatabase.Migration3To4)
             .build()
     }
     single { get<SplitFrameDatabase>().preferenceDao() }

@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         VideoProjectEntity::class,
         VideoExportWorkEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class SplitFrameDatabase : RoomDatabase() {
@@ -68,6 +68,12 @@ abstract class SplitFrameDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `video_projects` ADD COLUMN `selectedCellIndex` INTEGER")
                 db.execSQL("ALTER TABLE `video_projects` ADD COLUMN `primaryAudioMediaId` TEXT")
                 db.execSQL("ALTER TABLE `video_projects` ADD COLUMN `mediaItems` TEXT")
+            }
+        }
+
+        val Migration3To4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `video_projects` ADD COLUMN `mergeMode` TEXT NOT NULL DEFAULT 'SEQUENCE'")
             }
         }
     }
