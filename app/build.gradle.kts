@@ -15,7 +15,7 @@ val productionInterstitialAdUnitId = "ca-app-pub-7742442202074564/4574200638"
 val productionAppOpenAdUnitId = "ca-app-pub-7742442202074564/3863754196"
 
 android {
-    namespace = "com.example.splitframe"
+    namespace = "com.rameshta.splitframe"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -23,7 +23,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.splitframe"
+        applicationId = "com.rameshta.splitframe"
         minSdk = 24
         targetSdk = 36
         versionCode = 1

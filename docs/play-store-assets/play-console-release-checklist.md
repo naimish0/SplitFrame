@@ -4,7 +4,7 @@ Prepared July 18, 2026. These answers match the repository and Google Mobile Ads
 
 ## External Identity Decisions
 
-- [ ] Choose and confirm the permanent package name before the first Play upload. The repository currently uses `com.example.splitframe`, which is a template-style identifier and cannot safely be replaced without the publisher's owned namespace.
+- [x] Permanent package name confirmed and configured as `com.rameshta.splitframe`.
 - [ ] Confirm that the Play developer name is `SplitFrame`, or replace `SplitFrame` consistently in the policy and store listing with the actual legal/publishing entity.
 - [ ] Add a monitored developer-contact email in **Store presence > Store settings > Store listing contact details**. The privacy policy directs users to that email.
 
