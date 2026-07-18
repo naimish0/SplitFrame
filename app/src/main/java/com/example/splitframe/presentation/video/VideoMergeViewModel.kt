@@ -15,12 +15,9 @@ import com.example.splitframe.domain.ImageTransform
 import com.example.splitframe.domain.LayoutTemplate
 import com.example.splitframe.domain.MediaDurationMode
 import com.example.splitframe.domain.MediaSource
-import com.example.splitframe.domain.MixedMediaLimits
-import com.example.splitframe.domain.MixedMediaTemplateCatalog
 import com.example.splitframe.domain.VideoCanvasAspectRatio
 import com.example.splitframe.domain.VideoClip
 import com.example.splitframe.domain.VideoFitMode
-import com.example.splitframe.domain.VideoLayout
 import com.example.splitframe.domain.VideoLayoutMath
 import com.example.splitframe.domain.VideoMergeProject
 import com.example.splitframe.domain.withFitMode
@@ -77,8 +74,6 @@ class VideoMergeViewModel(
             is VideoMergeAction.ReplaceMedia -> readAndAssign(listOf(action.cellIndex to action.uri), replace = true)
             is VideoMergeAction.RemoveMedia -> removeMedia(action.cellIndex)
             is VideoMergeAction.SelectClip -> selectCell(action.cellIndex)
-            is VideoMergeAction.SelectTemplate -> selectTemplate(action.templateId)
-            is VideoMergeAction.SelectLayout -> selectLayout(action.layout)
             VideoMergeAction.SwapVideos -> swapCells(0, 1)
             is VideoMergeAction.SwapCells -> swapCells(action.firstCellIndex, action.secondCellIndex)
             VideoMergeAction.AutoArrange -> autoArrange()
@@ -240,42 +235,6 @@ class VideoMergeViewModel(
         reduce(VideoMergeResultEvent.SelectedClipChanged(safeCell))
         viewModelScope.launch { videoProjectStore.save(updated) }
         _state.update { it.copy(project = updated) }
-    }
-
-    private fun selectTemplate(templateId: String) {
-        val project = _state.value.project ?: return
-        val template = MixedMediaTemplateCatalog.byId(templateId) ?: return
-        if (template.slotCount < project.mediaByCell.size) {
-            reduce(VideoMergeResultEvent.Failed(R.string.layout_requires_media_count))
-            return
-        }
-        val updated = project.copy(
-            template = template,
-            mediaByCell = project.orderedMedia.toCellMap(template),
-            selectedCellIndex = template.cells.firstOrNull()?.index ?: project.selectedCellIndex,
-            spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
-            cornerRadiusDp = project.cornerRadiusDp.takeUnless { it == 0f } ?: template.defaultCornerRadiusDp,
-        ).withAvailableAudio()
-        commitProjectChange(updated)
-        reduce(VideoMergeResultEvent.PreviewPreparing)
-    }
-
-    private fun selectLayout(layout: VideoLayout) {
-        val project = _state.value.project ?: return
-        if (project.mediaByCell.size > 2) {
-            reduce(VideoMergeResultEvent.Failed(R.string.layout_requires_media_count))
-            return
-        }
-        val template = VideoLayoutMath.templateFor(layout, project.canvasAspectRatio)
-        commitProjectChange(
-            project.copy(
-                template = template,
-                mediaByCell = project.orderedMedia.toCellMap(template),
-                selectedCellIndex = template.cells.firstOrNull()?.index ?: 0,
-                spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
-            ).withAvailableAudio(),
-        )
-        reduce(VideoMergeResultEvent.PreviewPreparing)
     }
 
     private fun swapCells(firstCellIndex: Int, secondCellIndex: Int) {
@@ -586,8 +545,6 @@ class VideoMergeViewModel(
             is VideoMergeIntent.ReplaceVideo -> VideoMergeAction.ReplaceMedia(cellIndex, uri)
             is VideoMergeIntent.RemoveVideo -> VideoMergeAction.RemoveMedia(cellIndex)
             is VideoMergeIntent.SelectClip -> VideoMergeAction.SelectClip(cellIndex)
-            is VideoMergeIntent.SelectTemplate -> VideoMergeAction.SelectTemplate(templateId)
-            is VideoMergeIntent.SelectLayout -> VideoMergeAction.SelectLayout(layout)
             VideoMergeIntent.SwapVideos -> VideoMergeAction.SwapVideos
             is VideoMergeIntent.SwapCells -> VideoMergeAction.SwapCells(firstCellIndex, secondCellIndex)
             VideoMergeIntent.AutoArrange -> VideoMergeAction.AutoArrange

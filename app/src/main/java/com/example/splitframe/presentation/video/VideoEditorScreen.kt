@@ -103,11 +103,9 @@ import com.example.splitframe.domain.ExportResolution
 import com.example.splitframe.domain.ImageDimensions
 import com.example.splitframe.domain.ImageTransform
 import com.example.splitframe.domain.LayoutMath
-import com.example.splitframe.domain.LayoutTemplate
 import com.example.splitframe.domain.MediaDurationMode
 import com.example.splitframe.domain.MediaSource
 import com.example.splitframe.domain.MixedMediaLimits
-import com.example.splitframe.domain.MixedMediaTemplateCatalog
 import com.example.splitframe.domain.VideoCanvasAspectRatio
 import com.example.splitframe.domain.VideoClip
 import com.example.splitframe.domain.VideoFitMode
@@ -696,53 +694,6 @@ private fun MediaSelectionSection(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun TemplateSelector(
-    state: VideoMergeState,
-    onIntent: (VideoMergeIntent) -> Unit,
-) {
-    val project = state.project ?: return
-    val count = project.mediaCount.coerceAtLeast(MixedMediaLimits.MinItems)
-    val templates = MixedMediaTemplateCatalog.compatibleTemplates(count)
-    SplitFrameSection(title = stringResource(R.string.layout_controls)) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            templates.take(12).forEach { template ->
-                TemplateChip(
-                    template = template,
-                    selected = project.template.id == template.id,
-                    enabled = template.slotCount >= project.mediaCount && !state.isExporting,
-                    onClick = { onIntent(VideoMergeIntent.SelectTemplate(template.id)) },
-                )
-            }
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            VideoCanvasAspectRatio.entries.forEach { ratio ->
-                FilterChip(
-                    selected = project.canvasAspectRatio == ratio,
-                    onClick = { onIntent(VideoMergeIntent.SelectCanvasAspectRatio(ratio)) },
-                    label = { Text(ratio.label) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TemplateChip(
-    template: LayoutTemplate,
-    selected: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    FilterChip(
-        selected = selected,
-        enabled = enabled,
-        onClick = onClick,
-        label = { Text(template.name.templateDisplayName()) },
-    )
-}
-
 @Composable
 private fun MediaThumbnailStrip(
     state: VideoMergeState,
@@ -1158,8 +1109,3 @@ private fun Long.formatFileSize(): String =
     }
 
 private fun Float.percent(): String = "${(this * 100).roundToInt()}%"
-
-private fun String.templateDisplayName(): String =
-    replace('_', ' ')
-        .split(' ')
-        .joinToString(" ") { token -> token.replaceFirstChar { it.titlecase() } }

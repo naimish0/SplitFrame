@@ -42,6 +42,7 @@ data class VideoProjectEntity(
     val selectedCellIndex: Int?,
     val primaryAudioMediaId: String?,
     val mediaItems: String?,
+    val mergeMode: String,
 )
 
 @Entity(tableName = "video_export_work")

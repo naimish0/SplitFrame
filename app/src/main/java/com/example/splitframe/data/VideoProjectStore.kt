@@ -76,6 +76,7 @@ class VideoProjectStore(
             selectedCellIndex = selectedCellIndex,
             primaryAudioMediaId = primaryAudioMediaId,
             mediaItems = mediaByCell.encodeMediaItems(),
+            mergeMode = LegacySequenceMergeMode,
         )
 
     private fun VideoProjectEntity.toProject(): VideoMergeProject {
@@ -304,5 +305,6 @@ class VideoProjectStore(
         const val RowSeparator = "\n"
         const val TypeImage = "image"
         const val TypeVideo = "video"
+        const val LegacySequenceMergeMode = "SEQUENCE"
     }
 }
