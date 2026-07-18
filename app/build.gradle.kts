@@ -4,6 +4,16 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+val testBannerAdUnitId = "ca-app-pub-3940256099942544/6300978111"
+val testNativeAdUnitId = "ca-app-pub-3940256099942544/2247696110"
+val testInterstitialAdUnitId = "ca-app-pub-3940256099942544/1033173712"
+val testAppOpenAdUnitId = "ca-app-pub-3940256099942544/9257395921"
+val productionAdMobAppId = "ca-app-pub-7742442202074564~8952429340"
+val productionBannerAdUnitId = "ca-app-pub-7742442202074564/4826170430"
+val productionNativeAdUnitId = "ca-app-pub-7742442202074564/8964605851"
+val productionInterstitialAdUnitId = "ca-app-pub-7742442202074564/4574200638"
+val productionAppOpenAdUnitId = "ca-app-pub-7742442202074564/3863754196"
+
 android {
     namespace = "com.example.splitframe"
     compileSdk {
@@ -19,11 +29,24 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        // Use the real app ID in every variant so UMP can load this app's published
+        // privacy messages. Debug builds still use Google's test ad unit IDs below.
+        manifestPlaceholders["adMobAppId"] = productionAdMobAppId
+        buildConfigField("String", "BANNER_AD_UNIT_ID", "\"$testBannerAdUnitId\"")
+        buildConfigField("String", "NATIVE_AD_UNIT_ID", "\"$testNativeAdUnitId\"")
+        buildConfigField("String", "INTERSTITIAL_AD_UNIT_ID", "\"$testInterstitialAdUnitId\"")
+        buildConfigField("String", "APP_OPEN_AD_UNIT_ID", "\"$testAppOpenAdUnitId\"")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
+            manifestPlaceholders["adMobAppId"] = productionAdMobAppId
+            buildConfigField("String", "BANNER_AD_UNIT_ID", "\"$productionBannerAdUnitId\"")
+            buildConfigField("String", "NATIVE_AD_UNIT_ID", "\"$productionNativeAdUnitId\"")
+            buildConfigField("String", "INTERSTITIAL_AD_UNIT_ID", "\"$productionInterstitialAdUnitId\"")
+            buildConfigField("String", "APP_OPEN_AD_UNIT_ID", "\"$productionAppOpenAdUnitId\"")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -36,6 +59,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }
@@ -60,6 +84,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.play.services.ads)
+    implementation(libs.google.ump)
     implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.transformer)

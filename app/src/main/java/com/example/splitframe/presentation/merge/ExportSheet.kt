@@ -59,8 +59,8 @@ fun ExportSheet(
     state: MergeState,
     onIntent: (MergeIntent) -> Unit,
     onClose: () -> Unit,
-    onShowInterstitialAd: (() -> Unit) -> Unit = { action -> action() },
-    onShowInterstitialBeforeExport: (() -> Unit) -> Unit = { action -> action() },
+    onRequestExport: (() -> Unit) -> Unit = { export -> export() },
+    onExportForShare: () -> Unit = {},
 ) {
     val project = state.project ?: return
     val context = LocalContext.current
@@ -85,10 +85,15 @@ fun ExportSheet(
     }
 
     LaunchedEffect(state.exportResult, pendingShare) {
-        val success = state.exportResult as? ExportResult.Success
-        if (pendingShare && success != null) {
-            shareImage(context, success.savedUri)
-            pendingShare = false
+        if (pendingShare) {
+            when (val result = state.exportResult) {
+                is ExportResult.Success -> {
+                    shareImage(context, result.savedUri)
+                    pendingShare = false
+                }
+                is ExportResult.Failure -> pendingShare = false
+                null -> Unit
+            }
         }
     }
 
@@ -193,7 +198,7 @@ fun ExportSheet(
                         )
                         SecondaryActionButton(
                             text = stringResource(R.string.retry),
-                            onClick = { onIntent(MergeIntent.Export) },
+                            onClick = { onRequestExport { onIntent(MergeIntent.Export) } },
                             enabled = canExportImages,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -204,7 +209,7 @@ fun ExportSheet(
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PrimaryActionButton(
                         text = stringResource(R.string.save),
-                        onClick = { onShowInterstitialBeforeExport { onIntent(MergeIntent.Export) } },
+                        onClick = { onRequestExport { onIntent(MergeIntent.Export) } },
                         enabled = canExportImages,
                         modifier = Modifier.weight(1f),
                         icon = Icons.Default.Save,
@@ -214,11 +219,10 @@ fun ExportSheet(
                         onClick = {
                             val result = state.exportResult as? ExportResult.Success
                             if (result != null) {
-                                onShowInterstitialAd {
-                                    shareImage(context, result.savedUri)
-                                }
+                                shareImage(context, result.savedUri)
                             } else {
-                                onShowInterstitialBeforeExport {
+                                onRequestExport {
+                                    onExportForShare()
                                     pendingShare = true
                                     onIntent(MergeIntent.Export)
                                 }

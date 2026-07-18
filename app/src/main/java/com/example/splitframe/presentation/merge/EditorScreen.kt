@@ -98,8 +98,8 @@ fun EditorScreen(
     state: MergeState,
     onIntent: (MergeIntent) -> Unit,
     onBack: () -> Unit,
-    onShowInterstitialAd: (() -> Unit) -> Unit = { action -> action() },
-    onShowInterstitialBeforeExport: (() -> Unit) -> Unit = { action -> action() },
+    onRequestExport: (() -> Unit) -> Unit = { export -> export() },
+    onExportForShare: () -> Unit = {},
 ) {
     val project = state.project ?: return
     val context = LocalContext.current
@@ -223,15 +223,15 @@ fun EditorScreen(
                             modifier = Modifier.weight(1.25f),
                         )
                         Column(
-	                            modifier = Modifier.weight(1f),
-	                            verticalArrangement = Arrangement.spacedBy(16.dp),
-	                        ) {
-	                            ThumbnailStrip(
-	                                state = state,
-	                                selectedCell = selectedCell,
-	                                onCellSelected = { selectedCell = it },
-	                                onReorder = { from, to -> onIntent(MergeIntent.ReorderImages(from, to)) },
-	                            )
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            ThumbnailStrip(
+                                state = state,
+                                selectedCell = selectedCell,
+                                onCellSelected = { selectedCell = it },
+                                onReorder = { from, to -> onIntent(MergeIntent.ReorderImages(from, to)) },
+                            )
                             SelectedCellPanel(
                                 state = state,
                                 selectedCell = selectedCell,
@@ -239,7 +239,7 @@ fun EditorScreen(
                                 onAddPhotos = ::launchMultiPicker,
                                 onIntent = onIntent,
                             )
-                            EditorTools(
+                        EditorTools(
                                 state = state,
                                 selectedCell = selectedCell,
                                 onExport = { showExportSheet = true },
@@ -318,8 +318,8 @@ fun EditorScreen(
                 state = state,
                 onIntent = onIntent,
                 onClose = { showExportSheet = false },
-                onShowInterstitialAd = onShowInterstitialAd,
-                onShowInterstitialBeforeExport = onShowInterstitialBeforeExport,
+                onRequestExport = onRequestExport,
+                onExportForShare = onExportForShare,
             )
         }
     }

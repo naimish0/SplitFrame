@@ -4,8 +4,10 @@ import android.content.ContentResolver
 import android.database.Cursor
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.provider.OpenableColumns
 import android.util.Log
+import androidx.annotation.RequiresApi
 import com.example.splitframe.domain.VideoClip
 import com.example.splitframe.domain.VideoSupportStatus
 import java.util.UUID
@@ -59,7 +61,11 @@ class VideoMetadataReader(
                     mimeType = mimeType,
                     sizeBytes = querySize(uri),
                     hasAudio = hasAudio,
-                    isHdr = retriever.hasHdrMetadata(),
+                    isHdr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        retriever.hasHdrMetadata()
+                    } else {
+                        false
+                    },
                 ),
             )
         } catch (security: SecurityException) {
@@ -96,6 +102,7 @@ class VideoMetadataReader(
             }
         }.getOrNull()
 
+    @RequiresApi(Build.VERSION_CODES.R)
     private fun MediaMetadataRetriever.hasHdrMetadata(): Boolean {
         val transfer = extractMetadata(MediaMetadataRetriever.METADATA_KEY_COLOR_TRANSFER)?.toIntOrNull()
         val standard = extractMetadata(MediaMetadataRetriever.METADATA_KEY_COLOR_STANDARD)?.toIntOrNull()

@@ -48,8 +48,8 @@ val appModule = module {
     single { MixedMediaMetadataReader(androidApplication().contentResolver, get(), get()) }
     single { VideoExportRepository(androidApplication()) }
     single { WorkManager.getInstance(androidApplication()) }
-    single { AdsConfigRepository() }
-    single { SplitFrameAdManager(androidApplication()) }
+    single { AdsConfigRepository(androidApplication()) }
+    single { SplitFrameAdManager(androidApplication(), get()) }
     viewModel { MergeViewModel(get(), get(), get(), get()) }
     viewModel { SingleImageViewModel(get()) }
     viewModel { VideoMergeViewModel(get(), get(), get()) }

@@ -1,5 +1,6 @@
 package com.example.splitframe.export
 
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -109,10 +110,9 @@ class VideoExportWorker(
             .setOnlyAlertOnce(true)
             .setProgress(100, progress.coerceIn(0, 100), progress == 0)
             .build()
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ForegroundInfo(NotificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            ForegroundInfo(NotificationId, notification)
+        return when (val serviceType = videoExportForegroundServiceType(Build.VERSION.SDK_INT)) {
+            null -> ForegroundInfo(NotificationId, notification)
+            else -> ForegroundInfo(NotificationId, notification, serviceType)
         }
     }
 
@@ -144,3 +144,12 @@ class VideoExportWorker(
         fun uniqueWorkName(projectId: String): String = "video_export_$projectId"
     }
 }
+
+@SuppressLint("InlinedApi")
+internal fun videoExportForegroundServiceType(sdkInt: Int): Int? =
+    when {
+        sdkInt >= Build.VERSION_CODES.VANILLA_ICE_CREAM ->
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
+        sdkInt >= Build.VERSION_CODES.Q -> ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        else -> null
+    }

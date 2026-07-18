@@ -12,10 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -33,12 +35,22 @@ import com.example.splitframe.ui.components.SplitFrameTopAppBar
 fun ModeSelectionScreen(
     onOpenPhotoCollage: () -> Unit,
     onOpenVideoSplit: () -> Unit,
+    onOpenPrivacyPolicy: () -> Unit,
+    showNativeAd: Boolean,
 ) {
     Scaffold(
         topBar = {
             SplitFrameTopAppBar(
                 title = stringResource(R.string.app_name),
                 subtitle = stringResource(R.string.app_tagline),
+                actions = {
+                    IconButton(onClick = onOpenPrivacyPolicy) {
+                        Icon(
+                            imageVector = Icons.Default.PrivacyTip,
+                            contentDescription = stringResource(R.string.privacy_policy),
+                        )
+                    }
+                },
             )
         },
     ) { padding ->
@@ -58,9 +70,6 @@ fun ModeSelectionScreen(
                 )
             }
             item {
-                HomeNativeAd()
-            }
-            item {
                 ModeCard(
                     title = stringResource(R.string.mode_video_split),
                     description = stringResource(R.string.mode_video_split_desc),
@@ -68,8 +77,10 @@ fun ModeSelectionScreen(
                     onClick = onOpenVideoSplit,
                 )
             }
-            item {
-                HomeNativeAd()
+            if (showNativeAd) {
+                item {
+                    HomeNativeAd()
+                }
             }
         }
     }
