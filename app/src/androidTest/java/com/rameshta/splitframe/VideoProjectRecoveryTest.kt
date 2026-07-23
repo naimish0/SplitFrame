@@ -113,7 +113,9 @@ class VideoProjectRecoveryTest {
 
     @Test
     fun privacyRouteSurvivesActivityRecreation() {
-        composeRule.onNodeWithContentDescription("Privacy policy").performClick()
+        composeRule.onNodeWithContentDescription("Settings").performClick()
+        waitForText("Privacy policy")
+        composeRule.onNodeWithText("Privacy policy").performClick()
         waitForText("Photos and videos")
 
         val activityBeforeRecreation = activity

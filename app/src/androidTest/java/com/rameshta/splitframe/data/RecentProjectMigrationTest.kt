@@ -59,6 +59,74 @@ class RecentProjectMigrationTest {
         )
     }
 
+    @Test
+    fun migrationFromVersion1PreservesUserDataThroughVersion6() = runBlocking {
+        createVersion1Database()
+
+        val opened = Room.databaseBuilder(context, SplitFrameDatabase::class.java, DatabaseName)
+            .addMigrations(
+                SplitFrameDatabase.Migration1To2,
+                SplitFrameDatabase.Migration2To3,
+                SplitFrameDatabase.Migration3To4,
+                SplitFrameDatabase.Migration4To5,
+                SplitFrameDatabase.Migration5To6,
+            )
+            .build()
+        database = opened
+
+        assertEquals("kept", opened.preferenceDao().get("migration-key")?.value)
+        assertEquals(
+            listOf("adaptive_grid_3"),
+            opened.favoriteTemplateDao().observeAll().first().map { it.templateId },
+        )
+        assertEquals(
+            listOf("side_by_side"),
+            opened.exportHistoryDao().observeRecent().first().map { it.templateId },
+        )
+        assertEquals(
+            listOf("side_by_side"),
+            opened.recentLayoutDao().observeRecent().first().map { it.templateId },
+        )
+    }
+
+    private fun createVersion1Database() {
+        val callback = object : SupportSQLiteOpenHelper.Callback(1) {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE `preferences` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`))")
+                db.execSQL(
+                    """
+                    CREATE TABLE `export_history` (
+                        `id` TEXT NOT NULL, `templateId` TEXT NOT NULL, `savedUri` TEXT NOT NULL,
+                        `resolution` TEXT NOT NULL, `createdAtMillis` INTEGER NOT NULL, PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE `favorite_templates` (
+                        `templateId` TEXT NOT NULL, `createdAtMillis` INTEGER NOT NULL,
+                        PRIMARY KEY(`templateId`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("INSERT INTO `preferences` VALUES ('migration-key', 'kept')")
+                db.execSQL(
+                    "INSERT INTO `export_history` VALUES ('export-v1', 'side_by_side', 'content://exports/v1', 'FHD_1080', 100)",
+                )
+                db.execSQL("INSERT INTO `favorite_templates` VALUES ('adaptive_grid_3', 200)")
+            }
+
+            override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }
+        val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(DatabaseName)
+            .callback(callback)
+            .build()
+        FrameworkSQLiteOpenHelperFactory().create(configuration).use { helper ->
+            helper.writableDatabase
+        }
+    }
+
     private fun createVersion4Database() {
         val callback = object : SupportSQLiteOpenHelper.Callback(4) {
             override fun onCreate(db: SupportSQLiteDatabase) {

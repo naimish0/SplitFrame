@@ -52,6 +52,10 @@ data class CollageRenderMetrics(
     val dividerWidthPx: Float,
 )
 
+object CollageRenderColors {
+    const val BeforeAfterDividerArgb: ULong = 0xFFFFFFFFuL
+}
+
 object LayoutMath {
     fun cellFrame(
         cell: LayoutCell,
@@ -276,11 +280,6 @@ object LayoutMath {
                 heightPx = longEdge,
             )
         })
-    }
-
-    fun estimatedJpegSizeBytes(size: OutputSize): Long {
-        val pixels = size.widthPx.toLong() * size.heightPx.toLong()
-        return (pixels * 1.2f).toLong().coerceAtLeast(120_000L)
     }
 
     private fun originalOutputSize(

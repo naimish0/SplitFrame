@@ -6,6 +6,11 @@ import org.junit.Test
 
 class PhotoGeometryParityTest {
     @Test
+    fun `before-after divider uses theme-independent export white`() {
+        assertEquals(0xFFFFFFFFuL, CollageRenderColors.BeforeAfterDividerArgb)
+    }
+
+    @Test
     fun `original output keeps aspect while capping allocation risk`() {
         val square = LayoutMath.outputSizeForResolution(
             template = template(1f),

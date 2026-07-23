@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Privacy Policy for the SplitFrame Android photo collage, image resize, and video merge app.">
+  <title>SplitFrame Privacy Policy</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --background: #f4f8f7;
+      --surface: #ffffff;
+      --surface-muted: #e8f1ef;
+      --text: #13201e;
+      --muted: #526662;
+      --primary: #006b5f;
+      --primary-strong: #004d45;
+      --border: #c6d6d2;
+      --focus: #ffbf47;
+      --shadow: 0 18px 48px rgb(20 58 52 / 10%);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-synthesis: none;
+      line-height: 1.65;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top right, rgb(0 107 95 / 12%), transparent 34rem),
+        var(--background);
+      color: var(--text);
+    }
+
+    a {
+      color: var(--primary-strong);
+      text-underline-offset: 0.18em;
+      overflow-wrap: anywhere;
+    }
+
+    a:hover {
+      text-decoration-thickness: 0.14em;
+    }
+
+    a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+      border-radius: 0.2rem;
+    }
+
+    .skip-link {
+      position: fixed;
+      z-index: 10;
+      top: 0.75rem;
+      left: 0.75rem;
+      padding: 0.7rem 1rem;
+      border-radius: 0.6rem;
+      background: var(--text);
+      color: var(--surface);
+      transform: translateY(-160%);
+      transition: transform 120ms ease;
+    }
+
+    .skip-link:focus {
+      transform: translateY(0);
+    }
+
+    .page {
+      width: min(100% - 2rem, 74rem);
+      margin-inline: auto;
+      padding-block: 2rem 5rem;
+    }
+
+    .hero {
+      padding: clamp(1.5rem, 5vw, 3.5rem);
+      border: 1px solid var(--border);
+      border-radius: 1.5rem;
+      background: linear-gradient(145deg, var(--surface), var(--surface-muted));
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 0.75rem;
+      color: var(--primary);
+      font-size: 0.82rem;
+      font-weight: 750;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.22;
+      text-wrap: balance;
+    }
+
+    h1 {
+      max-width: 15ch;
+      margin: 0;
+      font-size: clamp(2.2rem, 8vw, 4.8rem);
+      letter-spacing: -0.045em;
+    }
+
+    h2 {
+      margin: 0 0 1rem;
+      font-size: clamp(1.45rem, 4vw, 2rem);
+      letter-spacing: -0.025em;
+    }
+
+    h3 {
+      margin: 1.5rem 0 0.5rem;
+      font-size: 1.08rem;
+    }
+
+    p,
+    li {
+      max-width: 72ch;
+    }
+
+    .lede {
+      max-width: 62ch;
+      margin: 1.25rem 0 0;
+      color: var(--muted);
+      font-size: clamp(1rem, 2.5vw, 1.2rem);
+    }
+
+    .metadata {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem 1.25rem;
+      margin-top: 1.5rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .metadata span {
+      display: inline-flex;
+      gap: 0.35rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+      gap: 2rem;
+      margin-top: 2rem;
+      align-items: start;
+    }
+
+    nav,
+    article section,
+    .notice {
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      background: var(--surface);
+    }
+
+    nav {
+      position: sticky;
+      top: 1rem;
+      padding: 1.15rem;
+    }
+
+    nav strong {
+      display: block;
+      margin-bottom: 0.6rem;
+    }
+
+    nav ol {
+      display: grid;
+      gap: 0.45rem;
+      margin: 0;
+      padding-left: 1.25rem;
+      font-size: 0.92rem;
+    }
+
+    main,
+    article {
+      min-width: 0;
+    }
+
+    article section,
+    .notice {
+      padding: clamp(1.25rem, 4vw, 2rem);
+      margin-bottom: 1rem;
+      scroll-margin-top: 1rem;
+    }
+
+    .notice {
+      border-left: 0.35rem solid var(--primary);
+      background: var(--surface-muted);
+    }
+
+    .notice p {
+      margin-block: 0.3rem;
+    }
+
+    ul {
+      padding-left: 1.3rem;
+    }
+
+    li + li {
+      margin-top: 0.45rem;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 0.8rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 42rem;
+      font-size: 0.93rem;
+    }
+
+    th,
+    td {
+      padding: 0.85rem;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--surface-muted);
+      font-size: 0.82rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .contact {
+      display: inline-flex;
+      align-items: center;
+      min-height: 2.75rem;
+      margin-top: 0.4rem;
+      padding: 0.65rem 0.9rem;
+      border-radius: 0.7rem;
+      background: var(--primary);
+      color: #ffffff;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    footer {
+      padding-top: 1rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    @media (max-width: 52rem) {
+      .layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      nav {
+        position: static;
+      }
+
+      nav ol {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 34rem) {
+      .page {
+        width: min(100% - 1rem, 74rem);
+        padding-top: 0.5rem;
+      }
+
+      .hero,
+      article section,
+      .notice {
+        border-radius: 0.85rem;
+      }
+
+      nav ol {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --background: #071310;
+        --surface: #0f211d;
+        --surface-muted: #17302a;
+        --text: #e2f2ee;
+        --muted: #afc7c1;
+        --primary: #72d8c7;
+        --primary-strong: #98ebdc;
+        --border: #35554e;
+        --shadow: 0 18px 48px rgb(0 0 0 / 28%);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    @media print {
+      :root {
+        --background: #ffffff;
+        --surface: #ffffff;
+        --surface-muted: #f2f2f2;
+        --text: #000000;
+        --muted: #333333;
+        --border: #bbbbbb;
+      }
+
+      body {
+        background: #ffffff;
+      }
+
+      .page {
+        width: 100%;
+        padding: 0;
+      }
+
+      .hero,
+      nav,
+      article section,
+      .notice {
+        box-shadow: none;
+        break-inside: avoid;
+      }
+
+      nav {
+        display: none;
+      }
+
+      .layout {
+        display: block;
+      }
+
+      a {
+        color: #000000;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#policy">Skip to privacy policy</a>
+
+  <div class="page">
+    <header class="hero">
+      <p class="eyebrow">SplitFrame · Android</p>
+      <h1>Privacy Policy</h1>
+      <p class="lede">
+        SplitFrame is an on-device photo collage, image resize, and video merge app.
+        This policy explains what the app accesses, what stays on your device, what
+        Google may process for advertising, and the choices available to you.
+      </p>
+      <div class="metadata" aria-label="Policy metadata">
+        <span><strong>Effective:</strong> <time datetime="2026-07-18">July 18, 2026</time></span>
+        <span><strong>Verified:</strong> <time datetime="2026-07-23">July 23, 2026</time></span>
+        <span><strong>Developer:</strong> Naimish Gupta</span>
+        <span><strong>Package:</strong> com.rameshta.splitframe</span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <nav aria-label="Privacy policy contents">
+        <strong>Contents</strong>
+        <ol>
+          <li><a href="#summary">Summary</a></li>
+          <li><a href="#data">Data practices</a></li>
+          <li><a href="#media">Media processing</a></li>
+          <li><a href="#ads">Advertising</a></li>
+          <li><a href="#permissions">Permissions</a></li>
+          <li><a href="#retention">Retention</a></li>
+          <li><a href="#choices">Your choices</a></li>
+          <li><a href="#security">Security</a></li>
+          <li><a href="#children">Children</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ol>
+      </nav>
+
+      <main id="policy">
+        <article>
+          <div class="notice" role="note" aria-label="Important privacy summary">
+            <p><strong>No SplitFrame account or cloud service is required.</strong></p>
+            <p>
+              Selected media is edited on your device and is not uploaded to a
+              SplitFrame-operated server. Google Mobile Ads uses network data as described below.
+            </p>
+          </div>
+
+          <section id="summary" aria-labelledby="summary-title">
+            <h2 id="summary-title">1. Summary</h2>
+            <ul>
+              <li>SplitFrame does not provide account creation or sign-in.</li>
+              <li>You choose the photos, videos, and optional audio that the app may access.</li>
+              <li>Editing, preview generation, and export processing happen on your device.</li>
+              <li>Your selected media is not provided to Google for advertising.</li>
+              <li>Google Mobile Ads may collect and share device and usage data when ads are requested.</li>
+              <li>You control when an export is saved or shared with another app.</li>
+            </ul>
+          </section>
+
+          <section id="data" aria-labelledby="data-title">
+            <h2 id="data-title">2. Data practices</h2>
+            <p>
+              The table separates information processed locally by SplitFrame from information
+              automatically handled by the Google Mobile Ads SDK.
+            </p>
+            <div class="table-wrap" role="region" aria-label="Data practices table" tabindex="0">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Information</th>
+                    <th scope="col">How it is used</th>
+                    <th scope="col">Where it goes</th>
+                    <th scope="col">Typical retention</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Selected photos, videos, and optional audio</td>
+                    <td>Previewing, editing, resizing, collage creation, and video export</td>
+                    <td>Processed on the device; not uploaded to a SplitFrame server</td>
+                    <td>Original files stay in their source location; access references may remain in a saved draft or project</td>
+                  </tr>
+                  <tr>
+                    <td>Media metadata</td>
+                    <td>Dimensions, duration, format, file size, frame rate, rotation, HDR, and audio availability</td>
+                    <td>Stored or processed locally</td>
+                    <td>For the active draft/project or until app data is cleared</td>
+                  </tr>
+                  <tr>
+                    <td>Editing and app state</td>
+                    <td>Templates, transforms, trim points, presets, favorites, recent exports, and export recovery</td>
+                    <td>Private on-device database, preferences, saved state, and cache</td>
+                    <td>Until replaced, deleted where supported, app data is cleared, or the app is uninstalled</td>
+                  </tr>
+                  <tr>
+                    <td>Exported images and videos</td>
+                    <td>Saving the result requested by you</td>
+                    <td>Android shared media storage, normally Pictures/SplitFrame or Movies/SplitFrame</td>
+                    <td>Until you delete the export separately</td>
+                  </tr>
+                  <tr>
+                    <td>IP address and approximate location derived from it</td>
+                    <td>Advertising, measurement, and fraud prevention</td>
+                    <td>Collected and shared by Google Mobile Ads when ads are requested</td>
+                    <td>Controlled by Google under its policies</td>
+                  </tr>
+                  <tr>
+                    <td>App interactions and diagnostics</td>
+                    <td>Ad delivery, analytics, SDK performance, security, and fraud prevention</td>
+                    <td>Collected and shared by Google Mobile Ads</td>
+                    <td>Controlled by Google under its policies</td>
+                  </tr>
+                  <tr>
+                    <td>Device or account identifiers</td>
+                    <td>Advertising, analytics, and fraud prevention</td>
+                    <td>Google Mobile Ads may handle advertising ID, app set ID, and applicable device/account identifiers</td>
+                    <td>Controlled by Google and affected by your Android or Google privacy settings</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="media" aria-labelledby="media-title">
+            <h2 id="media-title">3. Media processing, exports, and sharing</h2>
+            <p>
+              SplitFrame uses Android's system picker so you can grant access to specific media
+              instead of your entire library. On devices where the modern picker is unavailable,
+              Android may use its document picker fallback. The app may keep a system-granted
+              reference to selected media so a draft, batch, or video project can continue later.
+            </p>
+            <p>
+              Image and video processing is performed locally. Video export uses an app-private
+              temporary file. SplitFrame attempts to remove temporary output after the export and
+              maintains a recovery record so an interrupted, app-owned export can be reconciled on
+              the next startup.
+            </p>
+            <p>
+              When you tap Share, Android's share sheet gives the chosen exported file to the app
+              or recipient you select. Their privacy practices apply after the transfer.
+            </p>
+            <h3>Photo metadata</h3>
+            <p>
+              Resize exports remove metadata by default. If you explicitly choose to preserve
+              details, SplitFrame may copy a limited set of EXIF fields into the exported image,
+              including date, camera, copyright, exposure, and location fields that exist in the
+              source. Review that setting before sharing an export.
+            </p>
+          </section>
+
+          <section id="ads" aria-labelledby="ads-title">
+            <h2 id="ads-title">4. Advertising and consent</h2>
+            <p>
+              SplitFrame uses Google Mobile Ads to provide banner, native, interstitial, and
+              app-open advertisements. According to Google's current Android SDK disclosure, the
+              SDK automatically collects and shares IP address, user product interactions,
+              diagnostic information, and device or account identifiers for advertising,
+              analytics, and fraud prevention. Google states that this information is encrypted
+              in transit using TLS.
+            </p>
+            <p>
+              Where required, SplitFrame uses Google's User Messaging Platform to request or
+              manage advertising choices before enabling ad requests. When Google indicates that
+              privacy options are required, the app displays a <strong>Manage advertising privacy</strong>
+              action on its in-app Privacy screen. Your choice may result in personalized,
+              non-personalized, or limited ads; it may not remove all advertising.
+            </p>
+            <p>Google's own terms and retention practices apply to information it processes:</p>
+            <ul>
+              <li><a href="https://policies.google.com/privacy" rel="external">Google Privacy Policy</a></li>
+              <li><a href="https://policies.google.com/technologies/partner-sites" rel="external">How Google uses information from apps that use its services</a></li>
+              <li><a href="https://developers.google.com/admob/android/privacy/play-data-disclosure" rel="external">Google Mobile Ads SDK data disclosure</a></li>
+            </ul>
+          </section>
+
+          <section id="permissions" aria-labelledby="permissions-title">
+            <h2 id="permissions-title">5. Permissions and system access</h2>
+            <ul>
+              <li><strong>Selected media access:</strong> the system photo or document picker grants access to items you choose.</li>
+              <li><strong>Legacy storage:</strong> Android 7 through 9 may request storage permission only when saving an export to shared media storage.</li>
+              <li><strong>Network and advertising services:</strong> Google Mobile Ads adds internet, network-state, advertising ID, and applicable Android Privacy Sandbox permissions.</li>
+              <li><strong>Foreground processing and wake lock:</strong> Android may keep a long video export running and display the required foreground-service status.</li>
+            </ul>
+            <p>
+              SplitFrame does not request broad photo or video library permission on supported
+              modern Android versions.
+            </p>
+          </section>
+
+          <section id="retention" aria-labelledby="retention-title">
+            <h2 id="retention-title">6. Storage, retention, and deletion</h2>
+            <ul>
+              <li>Private drafts, preferences, presets, favorites, recent references, and project records remain on your device until replaced, deleted where supported, app storage is cleared, or the app is uninstalled.</li>
+              <li>Video projects can be deleted from the app. Clearing app storage removes all private SplitFrame records and cache files.</li>
+              <li>App backup and device-transfer backup are disabled for SplitFrame's private data.</li>
+              <li>Exports in your gallery survive app-data clearing and uninstallation. Delete them using your gallery, file manager, or Android settings.</li>
+              <li>Google controls retention of advertising information under Google's policies.</li>
+            </ul>
+          </section>
+
+          <section id="choices" aria-labelledby="choices-title">
+            <h2 id="choices-title">7. Your choices and rights</h2>
+            <ul>
+              <li>Choose which media to provide, or cancel the system picker.</li>
+              <li>Remove or reset drafts and video projects using available in-app controls.</li>
+              <li>Clear SplitFrame storage or uninstall the app to remove its private local data.</li>
+              <li>Delete exported files separately from shared media storage.</li>
+              <li>Use <strong>Manage advertising privacy</strong> when available and manage the advertising ID in Android settings.</li>
+              <li>Contact the publisher regarding applicable privacy rights or questions.</li>
+            </ul>
+            <p>
+              Because SplitFrame has no user account or publisher-operated data server, the
+              publisher generally cannot identify or remotely delete private data stored only on
+              your device. Google provides its own privacy tools for data processed through its
+              services.
+            </p>
+          </section>
+
+          <section id="security" aria-labelledby="security-title">
+            <h2 id="security-title">8. Security and international processing</h2>
+            <p>
+              SplitFrame relies on Android's application sandbox, system picker, scoped media
+              storage, and permission controls. Private app backup is disabled. Google states that
+              Mobile Ads data is encrypted in transit. No storage or transmission method is
+              completely secure, so absolute security cannot be guaranteed.
+            </p>
+            <p>
+              Google may process advertising information in countries other than your own under
+              its privacy policy and applicable transfer safeguards.
+            </p>
+          </section>
+
+          <section id="children" aria-labelledby="children-title">
+            <h2 id="children-title">9. Children</h2>
+            <p>
+              SplitFrame is not directed to children under 13, and the publisher does not knowingly
+              collect personal information directly from children. If you believe a child has
+              provided information in connection with the app, contact the publisher.
+            </p>
+          </section>
+
+          <section id="changes" aria-labelledby="changes-title">
+            <h2 id="changes-title">10. Changes to this policy</h2>
+            <p>
+              This policy may change when SplitFrame's features, SDKs, or legal obligations change.
+              The updated version will be posted at the same public location with a revised
+              effective or verification date. Material changes should also be reflected in the
+              app's in-app notice and Google Play Data safety declarations.
+            </p>
+          </section>
+
+          <section id="contact" aria-labelledby="contact-title">
+            <h2 id="contact-title">11. Contact</h2>
+            <p>
+              For privacy questions or requests, contact developer Naimish Gupta and include
+              “SplitFrame privacy” in the subject.
+            </p>
+            <a class="contact" href="mailto:naimish.app@gmail.com?subject=SplitFrame%20privacy">
+              naimish.app@gmail.com
+            </a>
+          </section>
+        </article>
+      </main>
+    </div>
+
+    <footer>
+      <p>SplitFrame Privacy Policy · Naimish Gupta · Package com.rameshta.splitframe</p>
+    </footer>
+  </div>
+</body>
+</html>

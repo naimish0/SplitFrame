@@ -1,0 +1,170 @@
+{
+  "en": {
+    "tagline": "Collage, resize, and merge",
+    "screens": [
+      ["Create Photo Collages", "Build polished layouts and resize images"],
+      ["Choose Clean Layouts", "Explore splits, grids, portraits, and landscapes"],
+      ["Merge Multiple Videos", "Join clips in order and export one MP4"],
+      ["Fine-Tune Every Frame", "Crop, position, style, and export lossless PNG"],
+      ["More Grid Choices", "Pick split frames, triptychs, mosaics, and grids"],
+      ["Layouts for Big Sets", "Adaptive grids support up to 15 photos"],
+      ["Edit 15-Photo Grids", "Add many photos and tune every cell"]
+    ]
+  },
+  "de": {
+    "tagline": "Collagen, Größenänderung und Videos",
+    "screens": [
+      ["Fotocollagen erstellen", "Elegante Layouts erstellen und Bilder skalieren"],
+      ["Klare Layouts wählen", "Teilungen, Raster, Porträts und Landschaften"],
+      ["Mehrere Videos verbinden", "Clips ordnen und als eine MP4 exportieren"],
+      ["Jeden Rahmen optimieren", "Zuschneiden, positionieren und verlustfrei exportieren"],
+      ["Mehr Rasterauswahl", "Teilungen, Triptychen, Mosaike und Raster"],
+      ["Layouts für große Sets", "Adaptive Raster für bis zu 15 Fotos"],
+      ["15-Foto-Raster bearbeiten", "Viele Fotos hinzufügen und jede Zelle anpassen"]
+    ]
+  },
+  "fr": {
+    "tagline": "Collage, redimensionnement et vidéo",
+    "screens": [
+      ["Créez des collages photo", "Composez des mises en page et redimensionnez vos images"],
+      ["Choisissez des mises en page", "Divisions, grilles, portraits et paysages"],
+      ["Fusionnez plusieurs vidéos", "Assemblez les clips et exportez un seul MP4"],
+      ["Ajustez chaque cadre", "Recadrez, placez, stylisez et exportez sans perte"],
+      ["Plus de choix de grilles", "Cadres divisés, triptyques, mosaïques et grilles"],
+      ["Des grilles pour les grands lots", "Jusqu’à 15 photos dans des grilles adaptatives"],
+      ["Modifiez des grilles de 15 photos", "Ajoutez vos photos et ajustez chaque cellule"]
+    ]
+  },
+  "ja": {
+    "tagline": "コラージュ・画像サイズ変更・動画結合",
+    "screens": [
+      ["写真コラージュを作成", "洗練されたレイアウトと画像サイズ変更"],
+      ["美しいレイアウトを選択", "分割、グリッド、縦向き、横向きを検索"],
+      ["複数の動画を結合", "クリップを順番に並べて1つのMP4へ"],
+      ["すべてのフレームを調整", "切り抜き、配置、スタイル、ロスレス出力"],
+      ["豊富なグリッド", "分割、三連、モザイク、グリッドから選択"],
+      ["たくさんの写真に対応", "最大15枚のアダプティブグリッド"],
+      ["15枚グリッドを編集", "写真を追加して各セルを細かく調整"]
+    ]
+  },
+  "hi": {
+    "tagline": "कोलाज, आकार बदलें और वीडियो जोड़ें",
+    "screens": [
+      ["फ़ोटो कोलाज बनाएँ", "सुंदर लेआउट बनाएँ और तस्वीरों का आकार बदलें"],
+      ["साफ़ लेआउट चुनें", "स्प्लिट, ग्रिड, पोर्ट्रेट और लैंडस्केप खोजें"],
+      ["कई वीडियो जोड़ें", "क्लिप क्रम में जोड़कर एक MP4 बनाएँ"],
+      ["हर फ़्रेम को बेहतर बनाएँ", "क्रॉप, पोज़िशन, स्टाइल और लॉसलेस निर्यात"],
+      ["अधिक ग्रिड विकल्प", "स्प्लिट फ़्रेम, ट्रिप्टिक, मोज़ेक और ग्रिड"],
+      ["बड़े सेट के लिए लेआउट", "अधिकतम 15 फ़ोटो के अनुकूल ग्रिड"],
+      ["15-फ़ोटो ग्रिड संपादित करें", "कई फ़ोटो जोड़ें और हर सेल को सुधारें"]
+    ]
+  },
+  "ru": {
+    "tagline": "Коллажи, размер фото и объединение видео",
+    "screens": [
+      ["Создавайте фотоколлажи", "Красивые макеты и изменение размера изображений"],
+      ["Выбирайте удобные макеты", "Разделения, сетки, портреты и пейзажи"],
+      ["Объединяйте несколько видео", "Соединяйте клипы по порядку в один MP4"],
+      ["Настраивайте каждый кадр", "Кадрирование, позиция, стиль и экспорт без потерь"],
+      ["Больше вариантов сетки", "Разделения, триптихи, мозаики и сетки"],
+      ["Макеты для больших наборов", "Адаптивные сетки до 15 фотографий"],
+      ["Редактируйте сетки из 15 фото", "Добавляйте фото и настраивайте каждую ячейку"]
+    ]
+  },
+  "es": {
+    "tagline": "Collage, redimensionado y unión de vídeos",
+    "screens": [
+      ["Crea collages de fotos", "Diseña composiciones y cambia el tamaño de imágenes"],
+      ["Elige diseños limpios", "Explora divisiones, cuadrículas, retratos y paisajes"],
+      ["Une varios vídeos", "Ordena clips y exporta un único MP4"],
+      ["Ajusta cada marco", "Recorta, coloca, estiliza y exporta sin pérdidas"],
+      ["Más opciones de cuadrícula", "Marcos divididos, trípticos, mosaicos y cuadrículas"],
+      ["Diseños para grandes grupos", "Cuadrículas adaptables de hasta 15 fotos"],
+      ["Edita cuadrículas de 15 fotos", "Añade fotos y ajusta cada celda"]
+    ]
+  },
+  "pt-PT": {
+    "tagline": "Colagens, redimensionamento e vídeos",
+    "screens": [
+      ["Crie colagens de fotografias", "Componha layouts e redimensione imagens"],
+      ["Escolha layouts elegantes", "Explore divisões, grelhas, retratos e paisagens"],
+      ["Junte vários vídeos", "Ordene clips e exporte um único MP4"],
+      ["Ajuste cada moldura", "Recorte, posicione, estilize e exporte sem perdas"],
+      ["Mais opções de grelha", "Molduras divididas, trípticos, mosaicos e grelhas"],
+      ["Layouts para grandes conjuntos", "Grelhas adaptáveis para até 15 fotografias"],
+      ["Edite grelhas de 15 fotografias", "Adicione fotografias e ajuste cada célula"]
+    ]
+  },
+  "pt-BR": {
+    "tagline": "Colagens, redimensionamento e vídeos",
+    "screens": [
+      ["Crie colagens de fotos", "Monte layouts e redimensione imagens"],
+      ["Escolha layouts elegantes", "Explore divisões, grades, retratos e paisagens"],
+      ["Junte vários vídeos", "Organize clipes e exporte um único MP4"],
+      ["Ajuste cada quadro", "Recorte, posicione, estilize e exporte sem perdas"],
+      ["Mais opções de grade", "Quadros divididos, trípticos, mosaicos e grades"],
+      ["Layouts para grandes conjuntos", "Grades adaptáveis para até 15 fotos"],
+      ["Edite grades de 15 fotos", "Adicione fotos e ajuste cada célula"]
+    ]
+  },
+  "it": {
+    "tagline": "Collage, ridimensionamento e video",
+    "screens": [
+      ["Crea collage fotografici", "Componi layout e ridimensiona le immagini"],
+      ["Scegli layout puliti", "Esplora divisioni, griglie, ritratti e paesaggi"],
+      ["Unisci più video", "Ordina le clip ed esporta un solo MP4"],
+      ["Perfeziona ogni riquadro", "Ritaglia, posiziona, applica stili ed esporta senza perdita"],
+      ["Più opzioni per le griglie", "Riquadri divisi, trittici, mosaici e griglie"],
+      ["Layout per grandi raccolte", "Griglie adattive fino a 15 foto"],
+      ["Modifica griglie da 15 foto", "Aggiungi foto e regola ogni cella"]
+    ]
+  },
+  "id": {
+    "tagline": "Kolase, ubah ukuran, dan gabungkan video",
+    "screens": [
+      ["Buat Kolase Foto", "Susun tata letak dan ubah ukuran gambar"],
+      ["Pilih Tata Letak Rapi", "Jelajahi belahan, kisi, potret, dan lanskap"],
+      ["Gabungkan Beberapa Video", "Urutkan klip dan ekspor menjadi satu MP4"],
+      ["Sempurnakan Setiap Bingkai", "Pangkas, atur, beri gaya, dan ekspor tanpa kehilangan"],
+      ["Lebih Banyak Pilihan Kisi", "Pilih bingkai belah, triptik, mosaik, dan kisi"],
+      ["Tata Letak untuk Banyak Foto", "Kisi adaptif mendukung hingga 15 foto"],
+      ["Edit Kisi 15 Foto", "Tambahkan banyak foto dan sesuaikan setiap sel"]
+    ]
+  },
+  "ar": {
+    "tagline": "كولاج وتغيير الحجم ودمج الفيديو",
+    "screens": [
+      ["أنشئ صور كولاج", "صمّم تخطيطات أنيقة وغيّر حجم الصور"],
+      ["اختر تخطيطات واضحة", "استكشف التقسيمات والشبكات والصور الطولية والعرضية"],
+      ["ادمج عدة فيديوهات", "رتّب المقاطع وصدّر ملف MP4 واحدًا"],
+      ["حسّن كل إطار", "اقتصّ وحرّك ونسّق وصدّر دون فقدان الجودة"],
+      ["خيارات شبكات أكثر", "إطارات مقسمة وثلاثيات وفسيفساء وشبكات"],
+      ["تخطيطات للمجموعات الكبيرة", "شبكات متكيفة لما يصل إلى 15 صورة"],
+      ["حرّر شبكة من 15 صورة", "أضف الصور واضبط كل خلية"]
+    ]
+  },
+  "ko": {
+    "tagline": "콜라주, 크기 조절, 동영상 합치기",
+    "screens": [
+      ["사진 콜라주 만들기", "세련된 레이아웃과 이미지 크기 조절"],
+      ["깔끔한 레이아웃 선택", "분할, 그리드, 세로 및 가로 레이아웃 탐색"],
+      ["여러 동영상 합치기", "클립을 순서대로 연결해 하나의 MP4로 내보내기"],
+      ["모든 프레임 세밀하게 조정", "자르기, 위치, 스타일 및 무손실 내보내기"],
+      ["더 다양한 그리드", "분할 프레임, 삼면화, 모자이크 및 그리드"],
+      ["많은 사진을 위한 레이아웃", "최대 15장의 적응형 그리드"],
+      ["15장 사진 그리드 편집", "사진을 추가하고 각 셀을 조정"]
+    ]
+  },
+  "ur": {
+    "tagline": "کولاج، سائز تبدیل اور ویڈیو یکجا کریں",
+    "screens": [
+      ["فوٹو کولاج بنائیں", "خوبصورت لے آؤٹ بنائیں اور تصاویر کا سائز بدلیں"],
+      ["صاف لے آؤٹ منتخب کریں", "تقسیم، گرڈ، پورٹریٹ اور لینڈ اسکیپ دیکھیں"],
+      ["کئی ویڈیوز یکجا کریں", "کلپس ترتیب سے ملا کر ایک MP4 بنائیں"],
+      ["ہر فریم بہتر بنائیں", "کراپ، پوزیشن، اسٹائل اور بغیر نقصان برآمد"],
+      ["مزید گرڈ انتخاب", "تقسیم شدہ فریم، ٹرپٹک، موزیک اور گرڈ"],
+      ["بڑے مجموعوں کے لیے لے آؤٹ", "زیادہ سے زیادہ 15 تصاویر کے موافق گرڈ"],
+      ["15 تصاویر کا گرڈ ایڈٹ کریں", "تصاویر شامل کریں اور ہر سیل بہتر بنائیں"]
+    ]
+  }
+}

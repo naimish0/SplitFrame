@@ -8,16 +8,22 @@ import com.rameshta.splitframe.data.RecentVideoProjectStatus
 import com.rameshta.splitframe.data.RecentVideoProjectStore
 import com.rameshta.splitframe.data.local.ExportHistoryEntity
 import com.rameshta.splitframe.domain.ExportResolution
+import com.rameshta.splitframe.domain.ImageDimensions
+import com.rameshta.splitframe.domain.ImageSource
 import com.rameshta.splitframe.domain.LayoutTemplate
 import com.rameshta.splitframe.domain.TemplateRepository
+import com.rameshta.splitframe.export.ImageSourceReader
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.withContext
 
 sealed interface HomeUiState {
     data object Loading : HomeUiState
@@ -46,27 +52,45 @@ data class RecentPhotoExport(
     val template: LayoutTemplate?,
     val resolution: ExportResolution,
     val createdAtMillis: Long,
+    val dimensions: ImageDimensions? = null,
 )
 
 class HomeDashboardViewModel(
     recentVideoProjectStore: RecentVideoProjectStore,
     projectStore: ProjectStore,
     templateRepository: TemplateRepository,
+    imageSourceReader: ImageSourceReader,
 ) : ViewModel() {
     private val templates = templateRepository.templates()
+    private val recentExportsWithDimensions = projectStore.observeRecentExports()
+        .map { exports ->
+            withContext(Dispatchers.IO) {
+                RecentExportsWithDimensions(
+                    exports = exports,
+                    dimensionsById = exports
+                        .mapNotNull { export ->
+                            imageSourceReader
+                                .dimensions(ImageSource.LocalUri(export.savedUri))
+                                ?.let { export.id to it }
+                        }
+                        .toMap(),
+                )
+            }
+        }
 
     private val states: Flow<HomeUiState> = combine(
         recentVideoProjectStore.observeProjects(),
         projectStore.observeFavoriteTemplates(),
         projectStore.observeRecentLayouts(),
-        projectStore.observeRecentExports(),
+        recentExportsWithDimensions,
     ) { projects, favoriteTemplateIds, recentTemplateIds, recentExports ->
         val readyState: HomeUiState = buildHomeReadyState(
             projects = projects,
             favoriteTemplateIds = favoriteTemplateIds,
             recentTemplateIds = recentTemplateIds,
             templates = templates,
-            recentExports = recentExports,
+            recentExports = recentExports.exports,
+            recentExportDimensions = recentExports.dimensionsById,
         )
         readyState
     }.catch { error ->
@@ -93,6 +117,7 @@ internal fun buildHomeReadyState(
     recentTemplateIds: List<String>,
     templates: List<LayoutTemplate>,
     recentExports: List<ExportHistoryEntity> = emptyList(),
+    recentExportDimensions: Map<String, ImageDimensions> = emptyMap(),
 ): HomeUiState.Ready {
     val templatesById = templates.associateBy(LayoutTemplate::id)
     val continueProject = projects.firstOrNull { it.status != RecentVideoProjectStatus.Corrupt }
@@ -124,6 +149,7 @@ internal fun buildHomeReadyState(
                 template = templatesById[export.templateId],
                 resolution = resolution,
                 createdAtMillis = export.createdAtMillis,
+                dimensions = recentExportDimensions[export.id],
             )
         }
         .take(MaxRecentPhotoExports)
@@ -139,6 +165,11 @@ internal fun buildHomeReadyState(
         recentlyUsedLayouts = recentlyUsedLayouts,
     )
 }
+
+private data class RecentExportsWithDimensions(
+    val exports: List<ExportHistoryEntity>,
+    val dimensionsById: Map<String, ImageDimensions>,
+)
 
 private const val MaxRecentProjects = 5
 private const val MaxHomeLayouts = 8

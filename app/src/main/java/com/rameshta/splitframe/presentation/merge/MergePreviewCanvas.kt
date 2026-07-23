@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.rameshta.splitframe.R
 import com.rameshta.splitframe.domain.CollageGradient
+import com.rameshta.splitframe.domain.CollageRenderColors
 import com.rameshta.splitframe.domain.CropShape
 import com.rameshta.splitframe.domain.ImageDimensions
 import com.rameshta.splitframe.domain.ImageTransform
@@ -112,7 +113,7 @@ fun MergePreviewCanvas(
     }
 
     val splitFrameColors = splitFrameColors()
-    val dividerColor = Color.White
+    val dividerColor = Color(CollageRenderColors.BeforeAfterDividerArgb)
     val emptyFill = MaterialTheme.colorScheme.surfaceContainerHighest
     val emptyText = MaterialTheme.colorScheme.onSurfaceVariant
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }

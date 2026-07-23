@@ -7,12 +7,32 @@ Package: `com.rameshta.splitframe`
 - App icon: `app-icon-512.png` (`512 x 512`, 32-bit RGBA PNG)
 - Feature graphic: `feature-graphic-1024x500.png` (`1024 x 500`)
 - Captioned screenshots: `screenshots/captioned/*.png` (`1080 x 1920`)
+- Localized release sets: `localized/<language>/`
+  - Feature graphic: `feature-graphic-1024x500.png`
+  - Phone screenshots: `phone/01-*.png` through `phone/07-*.png` (`2160 x 3840`)
+  - 7-inch tablet screenshots: `tablet-7-inch/01-*.png` through `07-*.png` (`2160 x 3840`)
+  - 10-inch tablet screenshots: `tablet-10-inch/01-*.png` through `07-*.png` (`2160 x 3840`)
+  - Complete feature overview in every device folder: `content-sheet-all-features.png`
 - Deployable privacy policy: `privacy-policy.html`
 - Markdown policy source: `privacy-policy-draft.md`
 - AdMob authorized-seller file: `app-ads.txt`
 - Play Console worksheet: `play-console-release-checklist.md`
 
 Use `screenshots/captioned/` for the Play Store gallery. These screenshots include marketing captions and exclude ad areas.
+
+For a localized listing, upload the seven screenshots and feature graphic from the matching
+`localized/<language>/` folder. The content sheet is a review/reference asset and intentionally
+contains all seven features; it is not part of the ordered Play Store screenshot upload.
+
+Supported language folders are `en`, `de`, `fr`, `ja`, `hi`, `ru`, `es`, `pt-PT`, `pt-BR`, `it`,
+`id`, `ar`, `ko`, and `ur`.
+
+Regenerate and validate the complete localized set with:
+
+```sh
+swift tools/generate_play_store_assets.swift
+python3 tools/optimize_validate_play_store_assets.py
+```
 
 ## Short Description
 

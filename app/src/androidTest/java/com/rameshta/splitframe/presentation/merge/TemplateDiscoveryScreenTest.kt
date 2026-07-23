@@ -96,7 +96,7 @@ class TemplateDiscoveryScreenTest {
         composeRule.onAllNodes(hasText("2 photos") and hasClickAction())[0].performClick()
 
         grid().performScrollToKey(target.id)
-        composeRule.onNodeWithText(target.name).assertIsDisplayed()
+        composeRule.onNodeWithTag("template-card:${target.id}").assertIsDisplayed()
 
         grid().performScrollToKey("template-discovery-controls")
         composeRule.onNodeWithText("Reset search and filters").performClick()

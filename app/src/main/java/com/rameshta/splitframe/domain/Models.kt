@@ -155,6 +155,9 @@ enum class ExportResolution(val label: String, val longEdgePx: Int) {
 }
 
 sealed interface ExportResult {
-    data class Success(val savedUri: String) : ExportResult
+    data class Success(
+        val savedUri: String,
+        val sizeBytes: Long? = null,
+    ) : ExportResult
     data class Failure(val reason: String) : ExportResult
 }

@@ -1,5 +1,6 @@
 package com.rameshta.splitframe.presentation.merge
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -7,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.rameshta.splitframe.R
+import com.rameshta.splitframe.domain.ExportResult
 import com.rameshta.splitframe.domain.ImageSource
 import com.rameshta.splitframe.domain.LayoutTemplate
 import com.rameshta.splitframe.domain.MergeProject
@@ -79,6 +81,29 @@ class ExportSheetTest {
             composeRule.onAllNodesWithText("Add photos to every cell before exporting.").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithText("Add photos to every cell before exporting.").assertIsDisplayed()
+    }
+
+    @Test
+    fun resolutionChoicesAvoidByteEstimatesAndSuccessShowsMeasuredSize() {
+        composeRule.setContent {
+            SplitFrameTheme {
+                ExportSheet(
+                    state = testMergeState().copy(
+                        exportResult = ExportResult.Success(
+                            savedUri = "content://media/lossless-output",
+                            sizeBytes = 2L * 1024L * 1024L,
+                        ),
+                    ),
+                    onIntent = {},
+                    onClose = {},
+                )
+            }
+        }
+
+        composeRule.onAllNodesWithText("~", substring = true).assertCountEquals(0)
+        composeRule.onNodeWithText("Saved to gallery · 2.0 MB")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 }
 

@@ -4,6 +4,7 @@ import com.rameshta.splitframe.data.RecentVideoProject
 import com.rameshta.splitframe.data.RecentVideoProjectStatus
 import com.rameshta.splitframe.data.local.ExportHistoryEntity
 import com.rameshta.splitframe.domain.ExportResolution
+import com.rameshta.splitframe.domain.ImageDimensions
 import com.rameshta.splitframe.domain.TemplateRepository
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -46,6 +47,9 @@ class HomeDashboardStateTest {
                     createdAtMillis = 30L,
                 ),
             ),
+            recentExportDimensions = mapOf(
+                "newest" to ImageDimensions(widthPx = 1920, heightPx = 1080),
+            ),
         )
 
         assertEquals(resumable, state.continueProject)
@@ -54,7 +58,12 @@ class HomeDashboardStateTest {
         assertEquals(listOf(recent.id), state.recentlyUsedLayouts.map { it.id })
         assertEquals(listOf("newest", "missing-template"), state.recentPhotoExports.map { it.id })
         assertEquals(favorite.id, state.recentPhotoExports.first().template?.id)
+        assertEquals(
+            ImageDimensions(widthPx = 1920, heightPx = 1080),
+            state.recentPhotoExports.first().dimensions,
+        )
         assertEquals(null, state.recentPhotoExports.last().template)
+        assertEquals(null, state.recentPhotoExports.last().dimensions)
     }
 
     @Test

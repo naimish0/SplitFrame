@@ -20,6 +20,7 @@ import com.rameshta.splitframe.domain.ExportResult
 import com.rameshta.splitframe.domain.VideoClip
 import com.rameshta.splitframe.domain.VideoMergeProject
 import com.rameshta.splitframe.domain.VideoSupportStatus
+import com.rameshta.splitframe.domain.videoExportResourceContractFailure
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -56,7 +57,8 @@ class VideoExportWorker(
                 return@withContext Result.failure(workDataOf(ErrorKey to reason))
             }
             val metadataReader: VideoMetadataReader = koin.get()
-            val preflightFailure = videoExportPreflightFailure(project, metadataReader::read)
+            val preflightFailure = videoExportResourceContractFailure(project)
+                ?: videoExportPreflightFailure(project, metadataReader::read)
             if (preflightFailure != null) {
                 updateWork(
                     projectStore = projectStore,

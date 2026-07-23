@@ -2,7 +2,7 @@
 
 Effective date: July 18, 2026
 
-Publisher: SplitFrame
+Developer and publisher contact: Naimish Gupta
 
 SplitFrame creates photo collages, resizes images, and merges videos. This Privacy Policy explains what information SplitFrame accesses, how it is used, when it is shared, and the choices available to users.
 
@@ -98,4 +98,4 @@ This policy may be updated when SplitFrame's features, SDKs, or legal obligation
 
 ## Contact
 
-For privacy questions or requests, use the **Developer contact** email shown in the **App support** section of SplitFrame's Google Play listing. Include “SplitFrame privacy” in the subject so the request can be identified.
+For privacy questions or requests, email Naimish Gupta at [naimish.app@gmail.com](mailto:naimish.app@gmail.com) and include “SplitFrame privacy” in the subject.
