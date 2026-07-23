@@ -71,16 +71,6 @@ class AppRouteTest {
         assertFalse(restored.createVideoProjectIfMissing)
     }
 
-    @Test
-    fun missingNotificationProjectClearsAnotherActiveProject() {
-        val fallback = appRouteForVideoProjectLaunch(
-            projectId = "99999999-9999-4999-8999-999999999999",
-            projectExists = false,
-        )
-
-        assertEquals(AppRoute(), fallback)
-    }
-
     private companion object {
         const val ProjectId = "33333333-3333-4333-8333-333333333333"
     }

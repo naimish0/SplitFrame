@@ -123,7 +123,6 @@ internal class AppOpenOpportunityController(
     private var currentOpportunity: AppOpenOpportunity? = null
     private var backgroundedAtElapsedMillis: Long? = null
     private var stopSuppression: StopSuppression? = null
-    private var recoveryLaunchPending = false
     private val externalLaunches = linkedMapOf<ExternalUiToken, ExternalLaunch>()
 
     var loadingSurfaceVisible: Boolean = false
@@ -159,7 +158,6 @@ internal class AppOpenOpportunityController(
             changingConfigurations -> StopSuppression.ConfigurationChange
             consentUiActive -> StopSuppression.ConsentUi
             fullScreenAdState != FullScreenAdState.Idle -> StopSuppression.OwnFullScreenAd
-            recoveryLaunchPending -> StopSuppression.RecoveryLaunch
             externalLaunches.isNotEmpty() -> StopSuppression.ExternalUi
             else -> null
         }
@@ -173,8 +171,7 @@ internal class AppOpenOpportunityController(
     fun onActivityResumed(nowElapsedMillis: Long): AppOpenOpportunity? {
         purgeExpiredExternalLaunches(nowElapsedMillis)
 
-        if (recoveryLaunchPending || externalLaunches.isNotEmpty() || stopSuppression != null) {
-            recoveryLaunchPending = false
+        if (externalLaunches.isNotEmpty() || stopSuppression != null) {
             externalLaunches.clear()
             backgroundedAtElapsedMillis = null
             stopSuppression = null
@@ -209,11 +206,6 @@ internal class AppOpenOpportunityController(
 
     fun cancelExternalUi(token: ExternalUiToken) {
         externalLaunches.remove(token)
-    }
-
-    fun markRecoveryLaunch() {
-        recoveryLaunchPending = true
-        cancelCurrentOpportunity()
     }
 
     fun onUserInteraction() {
@@ -286,7 +278,6 @@ internal class AppOpenOpportunityController(
         ConsentUi,
         OwnFullScreenAd,
         ExternalUi,
-        RecoveryLaunch,
     }
 
     companion object {

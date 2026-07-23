@@ -407,12 +407,8 @@
     <string name="video_export_cancel">Cancel export</string>
     <string name="video_4k_warning">4K export can take significantly longer and use more battery and storage.</string>
     <string name="video_encoder_unsupported">This device does not support that export size.</string>
-    <string name="video_export_notification_title">SplitFrame video export</string>
-    <string name="video_export_notification_body">Exporting merged video</string>
-    <string name="video_export_notification_complete_title">Video export complete</string>
-    <string name="video_export_notification_complete_body">Tap to return to your merged video.</string>
-    <string name="video_export_notification_failed_title">Video export failed</string>
-    <string name="video_export_notification_failed_body">Tap to return to your video project.</string>
+    <string name="video_export_background_title">SplitFrame video export</string>
+    <string name="video_export_background_body">Exporting merged video</string>
     <string name="video_project_unavailable">That video project is no longer available.</string>
     <string name="video_export_channel_name">Video exports</string>
     <string name="video_export_worker_missing_project">Video export project was not found.</string>
@@ -433,7 +429,7 @@
     <string name="manage_ad_privacy">Manage advertising privacy</string>
     <string name="google_privacy_policy">Read Google privacy policy</string>
     <string name="privacy_permissions_title">Permissions</string>
-    <string name="privacy_permissions_body">On Android 7 through 9, storage permission is requested only when you save an export to shared media storage. On Android 13 and later, notification permission may be requested so a long-running video export can show progress. You can change permissions in Android settings.</string>
+    <string name="privacy_permissions_body">On Android 7 through 9, storage permission is requested only when you save an export to shared media storage. You can change permissions in Android settings.</string>
     <string name="privacy_choices_title">Your choices and deletion</string>
     <string name="privacy_choices_body">Use Manage advertising privacy when it is shown to review available ad choices. You can clear SplitFrame data or uninstall the app to remove its private records. Delete exported files through your gallery or file manager. Google controls retention of information processed by its advertising services.</string>
     <string name="privacy_security_title">Security</string>
@@ -443,10 +439,6 @@
     <string name="privacy_contact_title">Contact</string>
     <string name="privacy_contact_body">For privacy questions, use the developer contact shown on the SplitFrame Google Play listing.</string>
     <string name="storage_permission_required">Storage permission is required to save exports on Android 7 through 9.</string>
-    <string name="video_notification_permission_title">Video export notifications</string>
-    <string name="video_notification_permission_body">Allow notifications to keep video export progress visible while SplitFrame works in the background. You can continue without allowing notifications.</string>
-    <string name="continue_action">Continue</string>
-    <string name="not_now">Not now</string>
     <string name="export_history_update_failed">Image saved, but Recent exports could not be updated.</string>
     <string name="move_previous">Move before previous photo</string>
     <string name="move_next">Move after next photo</string>

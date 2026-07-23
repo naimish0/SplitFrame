@@ -62,7 +62,6 @@ Depending on the Android version and the action selected, SplitFrame may use:
 
 - Android's system photo picker to access only media the user selects;
 - storage access on older Android versions to save requested exports;
-- notification access to show progress for a user-started background video export; and
 - foreground processing so a video export can continue while the app is not in the foreground.
 
 SplitFrame does not request broad access to all photos and videos on supported modern Android versions.

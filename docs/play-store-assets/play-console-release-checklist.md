@@ -74,15 +74,15 @@ Do not declare selected **Photos** or **Videos** as collected solely because Spl
 
 - [ ] Confirm the final release manifest declares `dataSync|mediaProcessing`, with both matching foreground-service permissions. The worker uses `mediaProcessing` on Android 15/API 35 and later, `dataSync` on API 29–34 where `mediaProcessing` does not exist, and no typed foreground service on API 28 and earlier.
 - [ ] In Play Console's foreground-service declaration, disclose both merged types. Choose **Media processing > Media transcoding** for current Android and explain that `dataSync` is the compatibility type used only for the same user-started export on API 29–34.
-- [ ] Suggested functionality description: “After the user selects clips and taps Export, SplitFrame transcodes the selected on-device media into an MP4 and saves it to the user's gallery. A persistent progress notification is shown while the export runs.”
+- [ ] Suggested functionality description: “After the user selects clips and taps Export, SplitFrame transcodes the selected on-device media into an MP4 and saves it to the user's gallery. Android may show its required foreground-service status only while the export runs.”
 - [ ] Suggested user-impact statement: “Deferring the task delays the export the user explicitly requested. Interrupting it can leave the requested output incomplete and requires the user to retry.”
-- [ ] Provide an unlisted or public video showing: select at least two clips, tap Export, put the app in the background, show the ongoing export notification, then return to the completed saved result.
+- [ ] Provide an unlisted or public video showing: select at least two clips, tap Export, put the app in the background, show that the export continues, then return to the completed saved result.
 - [ ] Attach the same user-started export evidence to every foreground-service type that Play Console requires you to declare; do not omit `dataSync` when it remains in the merged manifest for older Android versions.
 
 ## Permissions and Release Artifact Checks
 
 - [ ] On Android 7–9, complete a real-device/emulator export test and confirm any legacy storage permission is requested only when needed and denied permission produces a clear, recoverable message.
-- [ ] On Android 13+, verify notification denial does not crash or silently corrupt a video export.
+- [ ] On Android 13+, verify the app requests no notification permission and background export still completes without a terminal notification.
 - [ ] Inspect the final release manifest from the AAB, not only `src/main/AndroidManifest.xml`, because libraries merge permissions and components.
 - [ ] Verify the production AAB contains the production AdMob app ID and all four production unit IDs, while debug builds continue to use Google's test IDs.
 - [ ] Verify the release AAB is signed separately; signing is intentionally outside this repository checklist's implementation work.

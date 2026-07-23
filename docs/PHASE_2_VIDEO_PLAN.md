@@ -12,7 +12,7 @@
 8. Add video template selection and editor screens using existing components.
 9. Preview with two synchronized ExoPlayer instances; use one master clock, mute the non-primary clip, and seek/play/pause both together.
 10. Export through a `VideoExportRepository` and WorkManager boundary. Start with Media3 Transformer composition where supported by the installed API; keep `@UnstableApi` usage in the video preview/export boundary files.
-11. Persist export progress and completion through Room; show foreground notification from the worker and AdMob only from UI after success.
+11. Persist export progress and completion through Room; use only the platform-required foreground-service status while the worker runs and show AdMob only from UI after success.
 12. Add focused unit tests for layout, output sizing, trim, duration, audio selection, reducer behavior, undo/redo, and migration.
 
 ## Scope Decisions

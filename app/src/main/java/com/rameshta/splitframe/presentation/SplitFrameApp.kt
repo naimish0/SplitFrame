@@ -21,9 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -42,8 +40,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rameshta.splitframe.R
-import com.rameshta.splitframe.VideoProjectLaunchContract
-import com.rameshta.splitframe.VideoProjectLaunchRequest
 import com.rameshta.splitframe.ads.AdsConfigRepository
 import com.rameshta.splitframe.ads.BannerAd
 import com.rameshta.splitframe.ads.BannerAdLoadState
@@ -74,7 +70,6 @@ import com.rameshta.splitframe.presentation.video.VideoProjectsScreen
 import com.rameshta.splitframe.ui.components.AdContainer
 import java.util.UUID
 import kotlin.random.Random
-import kotlinx.coroutines.CancellationException
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
@@ -105,7 +100,7 @@ internal fun AppRoute.savedValues(): List<String> =
     )
 
 internal fun restoreAppRoute(savedValues: List<String>): AppRoute {
-    val projectId = VideoProjectLaunchContract.canonicalProjectIdOrNull(savedValues.getOrNull(1))
+    val projectId = canonicalProjectIdOrNull(savedValues.getOrNull(1))
     val savedScreen = savedValues.getOrNull(0)
         ?.let { name -> AppScreen.entries.firstOrNull { it.name == name } }
         ?: AppScreen.ModeSelection
@@ -130,19 +125,12 @@ internal fun restoreAppRoute(savedValues: List<String>): AppRoute {
     )
 }
 
-internal fun appRouteForVideoProjectLaunch(
-    projectId: String,
-    projectExists: Boolean,
-): AppRoute =
-    if (projectExists) {
-        AppRoute(
-            screen = AppScreen.VideoEditor,
-            activeVideoProjectId = projectId,
-            createVideoProjectIfMissing = false,
-        )
-    } else {
-        AppRoute()
-    }
+private fun canonicalProjectIdOrNull(rawProjectId: String?): String? {
+    val raw = rawProjectId ?: return null
+    if (raw.isBlank() || raw != raw.trim()) return null
+    val parsed = runCatching { UUID.fromString(raw) }.getOrNull() ?: return null
+    return parsed.toString().takeIf { it == raw }
+}
 
 private fun AppRoute.validPhotoBackDestination(): AppScreen =
     photoBackDestination.takeIf { destination ->
@@ -156,8 +144,6 @@ private val AppRouteSaver = listSaver<AppRoute, String>(
 
 @Composable
 fun SplitFrameApp(
-    videoProjectLaunchRequest: VideoProjectLaunchRequest? = null,
-    onVideoProjectLaunchConsumed: (VideoProjectLaunchRequest) -> Unit = {},
     viewModel: MergeViewModel = koinViewModel(),
     videoProjectStore: VideoProjectStore = koinInject(),
     recentVideoProjectStore: RecentVideoProjectStore = koinInject(),
@@ -205,17 +191,6 @@ fun SplitFrameApp(
         }
     }
 
-    var pendingNotificationAction by remember { mutableStateOf<(() -> Unit)?>(null) }
-    var showNotificationPermissionDialog by remember { mutableStateOf(false) }
-    var notificationPermissionHandled by rememberSaveable { mutableStateOf(false) }
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-    ) {
-        val action = pendingNotificationAction
-        pendingNotificationAction = null
-        action?.invoke()
-    }
-
     fun runWithLegacyStoragePermission(action: () -> Unit) {
         val needsPermission =
             Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
@@ -233,38 +208,8 @@ fun SplitFrameApp(
         }
     }
 
-    fun runVideoExportWithPermissions(action: () -> Unit) {
-        runWithLegacyStoragePermission {
-            val needsNotificationChoice =
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                    ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.POST_NOTIFICATIONS,
-                    ) != PackageManager.PERMISSION_GRANTED &&
-                    !notificationPermissionHandled
-            if (needsNotificationChoice) {
-                pendingNotificationAction = action
-                showNotificationPermissionDialog = true
-            } else {
-                action()
-            }
-        }
-    }
-
-    LaunchedEffect(videoProjectLaunchRequest?.requestId) {
-        val request = videoProjectLaunchRequest ?: return@LaunchedEffect
-        val projectExists = try {
-            videoProjectStore.get(request.projectId) != null
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (_: Throwable) {
-            false
-        }
-        route = appRouteForVideoProjectLaunch(request.projectId, projectExists)
-        if (!projectExists) {
-            Toast.makeText(context, videoProjectUnavailableMessage, Toast.LENGTH_LONG).show()
-        }
-        onVideoProjectLaunchConsumed(request)
+    fun runVideoExportWithStoragePermission(action: () -> Unit) {
+        runWithLegacyStoragePermission(action)
     }
 
     LaunchedEffect(state.isExporting, singleImageState.isProcessing) {
@@ -563,7 +508,7 @@ fun SplitFrameApp(
                                     intent == VideoMergeIntent.StartExport ||
                                     intent == VideoMergeIntent.RetryExport
                                 ) {
-                                    runVideoExportWithPermissions {
+                                    runVideoExportWithStoragePermission {
                                         foregroundVideoExportRequested = true
                                         videoViewModel.process(intent)
                                     }
@@ -605,51 +550,6 @@ fun SplitFrameApp(
         }
     }
 
-    if (showNotificationPermissionDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                notificationPermissionHandled = true
-                showNotificationPermissionDialog = false
-                val action = pendingNotificationAction
-                pendingNotificationAction = null
-                action?.invoke()
-            },
-            title = { Text(stringResource(R.string.video_notification_permission_title)) },
-            text = { Text(stringResource(R.string.video_notification_permission_body)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        notificationPermissionHandled = true
-                        showNotificationPermissionDialog = false
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            externalUiLauncher.launch(ExternalUiReason.Permission) {
-                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            }
-                        } else {
-                            val action = pendingNotificationAction
-                            pendingNotificationAction = null
-                            action?.invoke()
-                        }
-                    },
-                ) {
-                    Text(stringResource(R.string.continue_action))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        notificationPermissionHandled = true
-                        showNotificationPermissionDialog = false
-                        val action = pendingNotificationAction
-                        pendingNotificationAction = null
-                        action?.invoke()
-                    },
-                ) {
-                    Text(stringResource(R.string.not_now))
-                }
-            },
-        )
-    }
 }
 
 @Composable

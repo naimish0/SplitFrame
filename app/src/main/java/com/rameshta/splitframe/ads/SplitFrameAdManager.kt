@@ -210,12 +210,6 @@ class SplitFrameAdManager internal constructor(
         syncAppOpenLoadingSurface()
     }
 
-    internal fun markRecoveryLaunch() {
-        appOpenOpportunityController.markRecoveryLaunch()
-        appOpenOpportunityExpiryJob?.cancel()
-        syncAppOpenLoadingSurface()
-    }
-
     internal fun runExternalUiLaunch(
         reason: ExternalUiReason,
         action: () -> Unit,

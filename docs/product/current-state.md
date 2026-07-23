@@ -63,7 +63,7 @@ The home screen exposes Photo Collage and Video Merge. Resize is reachable from 
 | Photo/resize recovery | Implemented | Photo drafts use a strict Room-backed primitive codec plus `SavedStateHandle`; resize source, request, result, Fit/Fill, and output metadata restore through saved state and preferences with validity checks. |
 | Video project persistence | Implemented | The saveable route carries one canonical project UUID into a project-keyed Koin ViewModel. New sessions remain transient until valid media is persisted, survive recreation with that exact ID, and restore-only sessions never resurrect a missing row. |
 | WorkManager video recovery | Implemented | The UI observes the exact project's Room work row across Activity recreation. Work writes are guarded by WorkManager ID and allowed prior state; the final running-to-succeeded update is the cancellation-shielded publication commit. Controlled process-death validation remains manual. |
-| Video export notification routing | Implemented | Foreground and terminal notifications use a strict action, destination, canonical project UUID, matching data URI, and project-specific completion identity to open the exact stored project. Missing/malformed/deleted targets fall back to Home. |
+| Video export notifications | Removed | The app requests no notification permission and creates no completion/failure notifications or notification deep links. Android's required silent foreground-service status exists only while a long-running export is active. |
 | Ads and consent | Partially implemented | UMP-gated banner/native/interstitial/app-open formats exist; release-console declarations and real rendering cannot be proved from source. |
 | Offline editing/export | Implemented | Core selection, editing, resize, and export do not require a service call. Ads/consent naturally depend on network. |
 
@@ -88,7 +88,6 @@ The home screen exposes Photo Collage and Video Merge. Resize is reachable from 
 | Favorites/layout use/export history | Room | Favorites and recent layouts feed discovery and Home; recent valid photo exports are reachable from Home. |
 | Video project | Room plus recent metadata and saveable route UUID | Exact-ID open/create semantics, strict payload decoding, a keyed ViewModel, and the browser restore persisted video drafts without creating unrelated UUIDs. |
 | Video export work/result | WorkManager plus Room | Recreated UI observes queued/running/terminal state for the exact work ID; stale worker transitions are rejected. |
-| Notification destination | Strict explicit `MainActivity` intent | Exact action, destination, data URI, and canonical project UUID are validated before routing. |
 
 The video project uses a custom URL-encoded, tab/newline-delimited positional blob inside Room. Modern nonblank payloads now decode all-or-nothing; malformed/unknown/duplicate/invalid rows are surfaced as corrupt and are never normalized or rewritten. A historical blank modern payload remains decodable but is excluded from recent-project surfaces, while `NULL` retains legacy clip fallback. There is still no schema-level media-item table.
 

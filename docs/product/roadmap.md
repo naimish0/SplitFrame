@@ -21,15 +21,14 @@ Project recovery was addressed ahead of broader correctness work because already
 
 ### Restore the active video editor/export session
 
-Restore the exact video destination, project ID, and associated WorkManager export after Activity recreation and Android system process recreation. Make an export notification open that same video project. Do not add a project browser or rewrite navigation.
+Restore the exact video destination, project ID, and associated WorkManager export after Activity recreation and Android system process recreation. Notification routing was part of this historical slice and was removed on 2026-07-23. Do not add a project browser or rewrite navigation.
 
 ### Why this target
 
 - Video projects and export-work records are already persisted by project ID.
 - The old fresh `VideoMergeViewModel` path generated another UUID and could not observe the stored record.
 - The old plain route returned to Home on UI recreation.
-- The old Worker notification lacked destination/project identity.
-- The completed slice now saves the active video route, opens one exact project, reattaches its exact work row, and validates notification identity without adding a project browser.
+- The completed slice now saves the active video route, opens one exact project, and reattaches its exact work row without adding a project browser.
 
 ### Affected module and likely files
 
@@ -37,13 +36,13 @@ Only the `:app` module is affected.
 
 | File | Likely responsibility |
 |---|---|
-| `app/src/main/java/com/rameshta/splitframe/MainActivity.kt`, `VideoProjectLaunchContract.kt` | Parse and consume one strict exact-project launch request. |
+| `app/src/main/java/com/rameshta/splitframe/MainActivity.kt` | Own Activity creation and restoration without notification deep-link routing. |
 | `app/src/main/java/com/rameshta/splitframe/presentation/SplitFrameApp.kt` | Save/restore the video destination/project, key the ViewModel, and route missing targets safely to Home. |
 | `app/src/main/java/com/rameshta/splitframe/presentation/video/VideoMergeViewModel.kt` | Open the supplied project, preserve selection, observe its exact work row, and reject stale work events. |
 | `app/src/main/java/com/rameshta/splitframe/data/VideoProjectStore.kt`, `data/local/Daos.kt` | Separate explicit create from restore and atomically guard work transitions by work ID/prior state. |
 | `app/src/main/java/com/rameshta/splitframe/di/AppModule.kt` | Pass exact session arguments through the existing Koin ViewModel definition. |
-| `app/src/main/java/com/rameshta/splitframe/export/VideoExportWorker.kt`, `VideoExportRepository.kt` | Route progress/terminal notifications exactly and prevent canceled/replaced workers from publishing or reporting stale output. |
-| Focused JVM/Compose tests | Cover exact-ID loading, route restoration, work reattachment, malformed arguments, state races, notification identity, and Activity recreation. |
+| `app/src/main/java/com/rameshta/splitframe/export/VideoExportWorker.kt`, `VideoExportRepository.kt` | Keep only Android's required active foreground-service status and prevent canceled/replaced workers from publishing or reporting stale output. |
+| Focused JVM/Compose tests | Cover exact-ID loading, route restoration, work reattachment, malformed arguments, state races, and Activity recreation. |
 
 The implementation owner must inspect current APIs before deciding whether every listed file needs a change. Room tables/migrations should remain unchanged unless a verified need is found; such a schema change would exceed this slice.
 
@@ -53,8 +52,8 @@ The implementation owner must inspect current APIs before deciding whether every
 2. Android saved-state process recreation returns to the same video editor/project rather than Home or a new blank UUID.
 3. If that project has `ENQUEUED` or `RUNNING` export work, the recreated UI observes the same work ID and current progress.
 4. If the work completed while the process was absent, the recreated UI resolves the saved result/error for that same project.
-5. Tapping the foreground/completion notification opens the video editor for its project and does not create an unrelated project.
-6. A missing, malformed, or no-longer-existing project argument falls back safely without a crash or accidental access to another stale project.
+5. Completion and failure are surfaced from persisted work state in the exact project UI, without completion/failure notifications or notification deep links.
+6. A missing, malformed, or no-longer-existing restored project ID falls back safely without a crash or accidental access to another stale project.
 7. Home, photo collage, resize, back navigation, export cancellation, and the existing sequential video exporter retain current behavior.
 8. Editing and export remain fully usable offline; ad/consent code and production identifiers are untouched.
 9. No recent-project UI, Navigation component migration, video preview redesign, export-format change, or Room schema redesign is included.
@@ -64,7 +63,6 @@ The implementation owner must inspect current APIs before deciding whether every
 - JVM: `VideoProjectStore` returns the requested stored project, creates only for an explicit missing/new ID, and keeps different IDs isolated.
 - ViewModel coroutine test: initialization with a known ID restores the project and observes its matching `video_export_work` row.
 - Compose/instrumentation: saved destination/project survives `recreate()` and displays the restored edit state.
-- Worker/intent test: notification intent carries the exact project ID and video destination with stable update semantics.
 - Negative tests: blank/invalid/deleted ID, failed work, completed work, and canceled work all produce a safe deterministic state.
 - Regression commands: `:app:testDebugUnitTest`, the focused connected test class, `:app:lintDebug`, then `:app:assembleDebug`.
 
@@ -73,14 +71,13 @@ The implementation owner must inspect current APIs before deciding whether every
 - Creating two ViewModels for one project if Compose keys/parameters are unstable.
 - Reprocessing an Activity intent after recomposition and reopening a screen unexpectedly.
 - Showing stale WorkManager state after reset/cancel.
-- PendingIntent identity or mutability mistakes causing notifications to route to the wrong project.
 - Confusing Android system state restoration with a force-stop/cold-start “recent projects” feature, which is explicitly outside scope.
 
 ### Completion evidence
 
 - Source and JVM tests cover acceptance criteria 1 and 3–9 at contract/state level.
-- A physical API 36 connected test proves an existing Activity accepts the strict notification route and restores the same stored project after `recreate()`.
-- Acceptance criterion 2 and real queued/running/completed notification behavior still require the controlled manual process-death run in `docs/qa/manual-test-matrix.md`.
+- A physical API 36 connected test proves the exact stored project and route survive Activity `recreate()`.
+- Acceptance criterion 2 and real queued/running/completed background-work behavior still require the controlled manual process-death run in `docs/qa/manual-test-matrix.md`.
 
 ## Completed photo-export integrity target
 

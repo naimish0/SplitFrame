@@ -117,14 +117,14 @@ Ordered video-only Photo Picker
 
 Classification: sequential merge and its sequence-oriented preview are **Implemented**; real-device visual/audio parity is **Cannot verify**; true split-screen composition is **Not implemented**.
 
-### Recovery, work ownership, and notifications
+### Recovery and work ownership
 
 - The saveable app route retains the active canonical project UUID and creates a Koin ViewModel keyed to that exact project.
 - Room work rows remain keyed by project, while updates now also require the exact WorkManager UUID and an allowed prior state. Queued/running work may cancel; canceled or replaced work cannot return to running or terminal success.
 - The repository checks exact work ownership before insertion and immediately before MediaStore publication. It then makes the exact Room success compare-and-set the publication transaction's final commit; a false/throw rolls back the just-published URI.
-- Foreground notifications use a work-specific ID; completion/failure notifications use a separate project-specific range. Both carry a strict explicit Activity action, destination, canonical UUID, and matching data URI.
-- New work cancels a stale terminal notification. Terminal notification construction is best-effort and cannot turn a recorded successful export into Worker failure.
-- Activity recreation plus exact notification routing is automated on a physical API 36 device. Controlled process death while queued/running/terminal remains a manual validation boundary.
+- Long-running WorkManager exports retain only Android's required silent, low-priority foreground-service status while active. It has no tap action, requests no notification permission, and is removed when work ends.
+- Completion and failure are reported through the persisted project work state and editor UI; no terminal notifications or notification deep links are created.
+- Activity recreation for the exact active project is automated on a physical API 36 device. Controlled process death while queued/running/terminal remains a manual validation boundary.
 
 ## Preview/export control parity
 

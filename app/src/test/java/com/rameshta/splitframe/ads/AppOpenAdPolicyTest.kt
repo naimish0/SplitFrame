@@ -60,10 +60,10 @@ class AppOpenAdPolicyTest {
     }
 
     @Test
-    fun notificationRestorationAndSecondActivityCreationNeverBecomeColdStarts() {
-        val notification = controller()
+    fun nonLauncherRestorationAndSecondActivityCreationNeverBecomeColdStarts() {
+        val nonLauncher = controller()
         assertNull(
-            notification.onActivityCreated(
+            nonLauncher.onActivityCreated(
                 nowElapsedMillis = 0L,
                 restored = false,
                 launcherStart = false,
@@ -155,14 +155,10 @@ class AppOpenAdPolicyTest {
     }
 
     @Test
-    fun consentUiOwnFullScreenAdAndRecoveryLaunchSuppressReturn() {
+    fun consentUiAndOwnFullScreenAdSuppressReturn() {
         listOf<(AppOpenOpportunityController) -> Unit>(
             { it.onActivityStopped(0L, false, true, FullScreenAdState.Idle) },
             { it.onActivityStopped(0L, false, false, FullScreenAdState.Interstitial) },
-            {
-                it.markRecoveryLaunch()
-                it.onActivityStopped(0L, false, false, FullScreenAdState.Idle)
-            },
         ).forEach { prepare ->
             val controller = controller()
             controller.onActivityCreated(0L, false, true, false)

@@ -166,7 +166,7 @@ The user explicitly approved both the decision and its bounded production migrat
 - API 24, 29, 33, 35, and 36; low- and mid-tier physical devices where available.
 - Portrait/landscape sources; 0/90/180/270-degree rotation; audio and silent clips; mixed resolutions, frame rates, and supported containers/codecs.
 - 720p and 1080p as baseline. Treat 4K/HDR as separately gated until capability and output tests pass.
-- Low memory/storage, background export, process recreation, notification return, permission denial, and offline mode.
+- Low memory/storage, background export, process recreation, foreground return, permission denial, and offline mode.
 
 ### Regression commands
 

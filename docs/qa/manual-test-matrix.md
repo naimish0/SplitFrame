@@ -6,17 +6,17 @@ Status values: **Passed**, **Failed**, **Blocked**, **Manual verification requir
 
 | Check | Status | Evidence |
 |---|---|---|
-| JVM source suite | Passed | 237 test methods in 32 files. Combined execution plus targeted post-fix regressions pass. |
-| Debug lint | Passed | 0 errors, 124 warnings, 1 hint. |
+| JVM source suite | Passed | 245 test methods in 33 files. Full debug unit suite passes. |
+| Debug lint | Passed | 0 errors, 125 warnings, 1 hint. |
 | Release build | Passed | Fresh `:app:assembleRelease`, including release lint-vital. |
-| Instrumentation compile | Passed | 32 test methods in 12 files compile. |
-| Connected instrumentation | Blocked | API 36 run found and drove a fix for the app-open logo crash. Post-fix rerun was blocked when wireless ADB became offline; the screen-off retries were environmental, not product assertions. |
+| Instrumentation compile | Passed | 43 test methods in 14 files compile. |
+| Connected instrumentation | Passed | All 43 tests pass on the Samsung SM-S928B API 36 phone. The connected TV was explicitly excluded. |
 
 ## Required devices
 
 - API 24/28: legacy MediaStore and storage permission behavior.
 - API 29: scoped-storage pending/publish behavior.
-- API 33: Photo Picker and notification permission.
+- API 33: Photo Picker and background export without notification permission.
 - API 36: current target-SDK, foreground work, ads, and UI.
 - At least one low-memory device, one limited-storage device, and one codec-diverse physical device.
 - Repeat key UX cases in portrait/landscape, compact/tablet widths, light/dark, 100%/200% font, TalkBack, gesture/three-button navigation.
@@ -29,7 +29,7 @@ Status values: **Passed**, **Failed**, **Blocked**, **Manual verification requir
 | P0-02 | Configure Resize preset/custom dimensions, Fit/Fill, format/quality; rotate and process-recreate. | Request/source restore; result restores only if readable and metadata/geometry match. | Manual verification required |
 | P0-03 | Create, rename, duplicate, delete/Undo, and resume multiple video drafts. | Exact UUID/name/media/trim/transform/target/timestamp remain isolated; late saves never resurrect tombstones. | Manual verification required |
 | P0-04 | Kill during video Room-row creation, WorkManager enqueue, queued/running work, and terminal delivery. | Same work resumes or fails actionably; fresh enqueue is not invalidated; no duplicate success. | Manual verification required |
-| P0-05 | Open running/completed notifications for two projects after recreation. | Each opens its exact project; malformed/missing/deleted targets fall back safely. | Manual verification required |
+| P0-05 | Complete and fail background exports after recreation. | Persisted project state reports the exact result; no completion/failure notification or notification deep link appears. | Manual verification required |
 | P0-06 | Revoke URI permission, delete source, and use cloud-only media before reopen/export. | Missing cells are identified; export is blocked; repair/remove/rename/delete remain available. | Manual verification required |
 | P0-07 | Seed malformed photo draft and malformed/unknown-enum video rows. | Project is corrupt/resettable, never partially decoded, normalized, or silently rewritten. | Passed |
 | P0-08 | Upgrade real user databases from every historically shipped schema. | All projects/preferences survive without destructive migration. | Blocked until shipped versions are confirmed |
@@ -84,4 +84,4 @@ Status values: **Passed**, **Failed**, **Blocked**, **Manual verification requir
 
 ## Release exit
 
-Do not mark production-ready until all P0 rows are Passed or explicitly accepted by the release owner, the 32-test connected suite passes post-fix, release signing is verified, and all P1 ad/accessibility/media cases have recorded device evidence.
+Do not mark production-ready until all P0 rows are Passed or explicitly accepted by the release owner, the 43-test connected suite passes post-fix, release signing is verified, and all P1 ad/accessibility/media cases have recorded device evidence.

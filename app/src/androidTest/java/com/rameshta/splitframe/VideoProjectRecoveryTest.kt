@@ -1,7 +1,6 @@
 package com.rameshta.splitframe
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -87,37 +86,6 @@ class VideoProjectRecoveryTest {
         runBlocking {
             removeExactProject()
         }
-    }
-
-    @Test
-    fun notificationRouteAndActivityRecreationRestoreExactProject() {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            activity.startActivity(
-                Intent(activity, MainActivity::class.java).apply {
-                    action = VideoProjectLaunchContract.ActionOpenVideoProject
-                    data = Uri.parse(VideoProjectLaunchContract.notificationData(ProjectId))
-                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    putExtra(
-                        VideoProjectLaunchContract.ExtraDestination,
-                        VideoProjectLaunchContract.DestinationVideoEditor,
-                    )
-                    putExtra(VideoProjectLaunchContract.ExtraProjectId, ProjectId)
-                },
-            )
-        }
-
-        waitForVideoEditor()
-        composeRule.onNodeWithText("Merge videos").assertIsDisplayed()
-        composeRule.onNodeWithText("2160p (4K)").assertIsSelected()
-
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            activity.recreate()
-        }
-        composeRule.waitUntil(timeoutMillis = 10_000L) { activity.isDestroyed }
-
-        waitForVideoEditor()
-        composeRule.onNodeWithText("Merge videos").assertIsDisplayed()
-        composeRule.onNodeWithText("2160p (4K)").assertIsSelected()
     }
 
     @Test

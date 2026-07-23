@@ -8,8 +8,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
     <application
         android:name=".SplitFrameApplication"
         android:allowBackup="false"

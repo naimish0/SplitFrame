@@ -30,7 +30,7 @@ No baseline test, lint, or build failures were present before this phase.
 - The editor uses two remembered `ExoPlayer` instances and side-by-side/top-bottom layout branching.
 - Preview lives inside the main vertically scrolling content, so layout changes can happen while the preview is off-screen.
 - Export already uses Media3 `Composition`, `EditedMediaItemSequence`, `Transformer`, custom `VideoCompositorSettings`, H.264, AAC, HDR-to-SDR tone mapping, temporary output, and MediaStore publishing.
-- WorkManager is already used for background export, foreground notification, progress state, cancellation, and durable export state.
+- WorkManager is already used for background export, the platform-required foreground-service status, progress state, cancellation, and durable export state.
 - Undo/redo is project-snapshot based in `VideoMergeViewModel`.
 
 ### Persistence
