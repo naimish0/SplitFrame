@@ -2,9 +2,12 @@ package com.rameshta.splitframe.presentation
 
 import android.Manifest
 import android.app.Activity
+import android.content.ContentResolver
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -95,7 +98,7 @@ internal data class AppRoute(
 
 internal fun AppRoute.savedValues(): List<String> =
     listOf(
-        screen.takeUnless { it == AppScreen.PrivacyPolicy }?.name ?: AppScreen.ModeSelection.name,
+        screen.name,
         activeVideoProjectId.orEmpty(),
         createVideoProjectIfMissing.toString(),
         validPhotoBackDestination().name,
@@ -117,6 +120,7 @@ internal fun restoreAppRoute(savedValues: List<String>): AppRoute {
             savedScreen == AppScreen.Templates -> AppScreen.Templates
             savedScreen == AppScreen.Editor -> AppScreen.Editor
             savedScreen == AppScreen.SingleImage -> AppScreen.SingleImage
+            savedScreen == AppScreen.PrivacyPolicy -> AppScreen.PrivacyPolicy
             else -> AppScreen.ModeSelection
         },
         activeVideoProjectId = projectId,
@@ -187,6 +191,7 @@ fun SplitFrameApp(
 
     val storagePermissionDeniedMessage = stringResource(R.string.storage_permission_required)
     val videoProjectUnavailableMessage = stringResource(R.string.video_project_unavailable)
+    val recentExportUnavailableMessage = stringResource(R.string.home_recent_export_unavailable)
     var pendingLegacyStorageAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val legacyStoragePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -370,6 +375,20 @@ fun SplitFrameApp(
                                 screen = if (accepted) AppScreen.Editor else AppScreen.Templates,
                                 photoBackDestination = AppScreen.ModeSelection,
                             )
+                        },
+                        onOpenRecentPhotoExport = { savedUri ->
+                            val viewerIntent = context.imageViewerIntent(savedUri)
+                            if (viewerIntent == null) {
+                                Toast.makeText(
+                                    context,
+                                    recentExportUnavailableMessage,
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            } else {
+                                externalUiLauncher.launch(ExternalUiReason.ExternalViewer) {
+                                    context.startActivity(viewerIntent)
+                                }
+                            }
                         },
                         onOpenPrivacyPolicy = {
                             route = route.copy(screen = AppScreen.PrivacyPolicy)
@@ -661,3 +680,14 @@ private fun Context.findActivity(): Activity? =
         is ContextWrapper -> baseContext.findActivity()
         else -> null
     }
+
+private fun Context.imageViewerIntent(savedUri: String): Intent? {
+    val uri = runCatching { Uri.parse(savedUri) }
+        .getOrNull()
+        ?.takeIf { it.scheme == ContentResolver.SCHEME_CONTENT }
+        ?: return null
+    val intent = Intent(Intent.ACTION_VIEW)
+        .setDataAndType(uri, "image/*")
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    return intent.takeIf { it.resolveActivity(packageManager) != null }
+}

@@ -1,8 +1,11 @@
 package com.rameshta.splitframe.presentation.video
 
+import android.content.ClipData
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,6 +46,7 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AssistChip
@@ -943,6 +947,9 @@ private fun TransformControls(
 @Composable
 private fun VideoExportPanel(state: VideoMergeState) {
     val project = state.project ?: return
+    val context = LocalContext.current
+    val externalUiLauncher = LocalExternalUiLauncher.current
+    val shareUnavailableMessage = stringResource(R.string.video_share_unavailable)
     val outputSize = VideoLayoutMath.outputSizeForMedia(project.canvasAspectRatio, project.exportResolution, project.mediaByCell)
     val outputDurationMs = VideoLayoutMath.outputDurationForMergedVideos(project.orderedClips)
     val estimateBytes = VideoLayoutMath.estimateMp4Bytes(outputSize, outputDurationMs)
@@ -968,13 +975,53 @@ private fun VideoExportPanel(state: VideoMergeState) {
                 StatusMessage(text = stringResource(R.string.video_hdr_sdr_note), tone = StatusTone.Info)
             }
             when (val result = state.exportResult) {
-                is com.rameshta.splitframe.domain.ExportResult.Success ->
+                is com.rameshta.splitframe.domain.ExportResult.Success -> {
                     StatusMessage(text = stringResource(R.string.video_export_success), tone = StatusTone.Success)
+                    SecondaryActionButton(
+                        text = stringResource(R.string.share),
+                        icon = Icons.Default.Share,
+                        onClick = {
+                            val shareIntent = context.videoShareIntent(result.savedUri)
+                            if (shareIntent == null) {
+                                Toast.makeText(
+                                    context,
+                                    shareUnavailableMessage,
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            } else {
+                                externalUiLauncher.launch(ExternalUiReason.ShareSheet) {
+                                    context.startActivity(shareIntent)
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 is com.rameshta.splitframe.domain.ExportResult.Failure ->
                     StatusMessage(text = stringResource(R.string.video_export_failure, result.reason), tone = StatusTone.Error)
                 null -> Unit
             }
         }
+    }
+}
+
+private fun Context.videoShareIntent(savedUri: String): Intent? {
+    val sendIntent = createVideoSendIntent(savedUri) ?: return null
+    if (sendIntent.resolveActivity(packageManager) == null) return null
+    return Intent.createChooser(sendIntent, getString(R.string.share))
+}
+
+internal fun Context.createVideoSendIntent(savedUri: String): Intent? {
+    val uri = runCatching { Uri.parse(savedUri) }
+        .getOrNull()
+        ?.takeIf { it.scheme == ContentResolver.SCHEME_CONTENT }
+        ?: return null
+    return Intent(Intent.ACTION_SEND).apply {
+        type = "video/mp4"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_SUBJECT, getString(R.string.video_share_subject))
+        clipData = ClipData.newRawUri(getString(R.string.video_share_subject), uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 }
 

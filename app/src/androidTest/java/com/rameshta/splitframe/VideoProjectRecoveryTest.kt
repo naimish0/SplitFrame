@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -127,6 +128,22 @@ class VideoProjectRecoveryTest {
         composeRule.waitUntil(timeoutMillis = 10_000L) { activity.isDestroyed }
         waitForVideoEditor()
         composeRule.onNodeWithText("2160p (4K)").assertIsSelected()
+    }
+
+    @Test
+    fun privacyRouteSurvivesActivityRecreation() {
+        composeRule.onNodeWithContentDescription("Privacy policy").performClick()
+        waitForText("Photos and videos")
+
+        val activityBeforeRecreation = activity
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            activityBeforeRecreation.recreate()
+        }
+        composeRule.waitUntil(timeoutMillis = 10_000L) { activityBeforeRecreation.isDestroyed }
+
+        waitForText("Photos and videos")
+        composeRule.onNodeWithText("Photos and videos").assertIsDisplayed()
+        activity = resumedActivity()
     }
 
     private fun waitForVideoEditor() {

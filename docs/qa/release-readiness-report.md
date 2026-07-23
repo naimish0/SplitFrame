@@ -1,14 +1,14 @@
 # SplitFrame Release Readiness Report
 
-Date: 2026-07-21  
-Scope: Cycles 7B, 7C, 8, 9, and 10 on the current uncommitted working tree.
+Date: 2026-07-23
+Scope: Current local `main` through the Home history, route-restoration, and video-sharing completion.
 
 Status values are **Passed**, **Failed**, **Blocked**, **Manual verification required**, and **Not applicable**.
 
 ## Release decision
 
 **Not ready for Play publication.** The current source compiles as a release APK, focused and
-combined JVM evidence passes, lint has no errors, and all 39 instrumentation tests pass on a
+combined JVM evidence passes, lint has no errors, and all 42 instrumentation tests pass on a
 physical API 36 Samsung. Publication remains blocked by external release signing. Process-death
 MediaStore durability, real codecs/providers, UMP/AdMob callbacks, accessibility, and broader
 API-level coverage also remain manual release gates.
@@ -19,10 +19,10 @@ API-level coverage also remain manual release gates.
 |---|---|---|
 | Debug production compilation | Passed | Repeated focused JVM/device builds compiled current debug source. |
 | Release compilation/package | Passed | Fresh `:app:assembleRelease`; release lint-vital also passed. |
-| JVM tests | Passed | 237 current test methods across 32 files. The combined run executed 235 and exposed one pixel-cap rounding regression; that fix and both subsequently added regressions passed targeted reruns. |
-| Static analysis | Passed | `:app:lintDebug`: 0 errors, 124 warnings, 1 hint. |
-| Instrumentation source compilation | Passed | 32 tests across 12 files compile. |
-| Connected instrumentation | Passed on API 36 | All 39 tests pass on a physical Samsung API 36 device after the app-open loading-logo and brittle matcher/scroll fixes. |
+| JVM tests | Passed | 248 current test methods across 34 files, including route restoration and recent-export state mapping. |
+| Static analysis | Passed | `:app:lintDebug`: 0 errors, 127 warnings, 1 hint. |
+| Instrumentation source compilation | Passed | 42 tests across 14 files compile. |
+| Connected instrumentation | Passed on API 36 | All 42 tests pass on a physical Samsung API 36 phone; the TV device was explicitly excluded. |
 | Accidental debug code | Passed | No new `BuildConfig.DEBUG` bypass, localhost endpoint, test-only import in main, stack trace printing, or test-device override was found. |
 | Credentials/secrets | Passed | No credential-shaped material or signing secret was added; production identifiers were not changed or copied into docs. |
 | Ad ID routing | Passed | Debug ad units remain official Google test inventory; release units remain the unmodified production configuration. |
@@ -69,11 +69,13 @@ API-level coverage also remain manual release gates.
 | Check | Status | Evidence |
 |---|---|---|
 | Home primary actions/state | Passed | Create Collage, Resize Image, and Merge Videos are first; empty rails are omitted. |
+| Recent photo exports | Passed | Valid Room history appears conditionally on Home and dispatches the exact saved URI to an installed image viewer; invalid history is excluded. |
 | Template discovery | Passed | Search, composable filters, favorites, recents, stable keys, and empty/error states are implemented. |
 | Smart recommendations | Passed | Pure deterministic offline ranking is explainable and preserves access to all valid layouts. |
 | Export presets | Passed | Centralized fixed/social/wallpaper/custom dimensions with explicit Fit/Fill and validation. |
 | Creative tools | Passed | Text, four background families, three border families, five crop shapes, Auto Arrange, drag/swap accessibility actions, and actual resize comparison are reachable. |
-| Back/navigation restoration | Passed | Saveable routes preserve Home/Template callers and exact video projects. |
+| Back/navigation restoration | Passed | Saveable routes preserve every reachable destination, including Privacy, Home/Template callers, and exact video projects. |
+| Video result sharing | Passed | Successful export exposes a chooser-backed `video/mp4` share intent with the exact content URI, clip data, and read grant. |
 | Light/dark, large font, TalkBack, touch, insets | Manual verification required | Source uses Material 3 semantics/targets/insets; runtime focus order, clipping, contrast, 200% font, and form-factor coverage remain open. |
 | Loading/empty/error states | Passed | Implemented across Home, discovery, recents, editors, resize, and ads; applicable connected assertions pass on API 36. |
 
@@ -84,7 +86,7 @@ API-level coverage also remain manual release gates.
 | UMP eligibility/privacy entry | Passed | All formats share consent state; privacy options are exposed when required. Real geography/console behavior is manual. |
 | Workflow interstitials | Passed | Stable workflow IDs count committed successes only; one opportunity follows every second unique success and never blocks output. |
 | App-open policy | Passed | First-session exclusion, cold/qualified return windows, four-hour cap, external-UI/export/config suppression, late-ad expiry, and full-screen separation are centralized. |
-| App-open loading surface | Passed | Device testing found the inset-drawable crash; it now uses a Compose-compatible raster logo, and the post-fix 39-test API 36 suite passes. |
+| App-open loading surface | Passed | Device testing found the inset-drawable crash; it now uses a Compose-compatible raster logo, and the current 42-test API 36 suite passes. |
 | Banner lifecycle/placement | Passed | One adaptive anchored banner is limited to safe browsing surfaces with reserved layout and lifecycle disposal. |
 | Native lifecycle/placement | Passed | Stable insertion after organic content, caps, attribution/AdChoices, and explicit destruction are implemented. |
 | Real SDK/UMP/no-fill/click callbacks | Manual verification required | Run with official test inventory and UMP test geography on physical devices. |

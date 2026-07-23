@@ -6,7 +6,7 @@
 - Manual saveable `AppRoute` navigation restores Home/Template callers, photo editor/resize destinations, and exact video project UUIDs. ViewModels own domain state; `SavedStateHandle`, preferences, and Room store stable primitives only.
 - Core collage, resize, video edit/save/export are local and remain usable without network. Network use is limited to consent/advertising SDK behavior.
 - Room version 6 stores preferences, export history, favorite/recent layouts, video project/work payloads, and recent-project metadata. The verified migration chain is v4→v5→v6.
-- Home exposes Create Collage, Resize Image, and Merge Videos before conditional Continue Editing, Recent Projects, Favorites, and Recent Layouts; empty rails are omitted.
+- Home exposes Create Collage, Resize Image, and Merge Videos before conditional Continue Editing, Recent Projects, Favorites, Recent Layouts, and Recent Photo Exports; empty rails are omitted.
 - The canonical template repository contains 110 layouts. Discovery uses search, verified metadata filters, favorites, stable lazy keys, and deterministic offline recommendation scoring. Every card responds: exact/larger layouts preserve all selected images, while smaller layouts stay unapplied and explain that extra photos must be removed. Selection/navigation alone never updates recents; the first substantive media/editor action or successful export does.
 - Single-image export centralizes 13 presets: six fixed social targets, WhatsApp Status, runtime wallpaper, Custom, and five original-aspect choices. Canvas dimensions, Fit/Fill, format, and quality are separate persisted values.
 - Photo preview/export share canvas, cell, spacing, corner, border, crop/pan/zoom, shape, text, background, and EXIF-oriented geometry. Output allocation is capped at 24 MP.
@@ -14,6 +14,7 @@
 - Photo active-draft persistence uses a strict versioned URL-safe Base64 primitive codec in the existing preference table plus SavedStateHandle. Missing media blocks export and remains repairable; malformed drafts require reset.
 - Resize result restoration requires a readable output URI and matching actual dimensions, format, quality, and Fit/Fill semantics. Comparison uses actual source/output metadata.
 - Video preview/export implement the accepted sequential contract: one full-frame trimmed clip at a time, ordered cumulative timeline, per-segment clip audio, crop-fill transforms, H.264/AAC MP4, and no silent encoder fallback.
+- Successful photo history items open their exact saved URI in an installed viewer, and successful video exports expose a chooser-backed share action with the exact content URI and read grant.
 - Video export preflights current URIs/metadata, maps codec/storage failures, validates a non-empty playable video track/duration, sweeps stale cache files, and publishes only under exact work ownership.
 - Global and project-local video recovery compare exact WorkManager UUID/state. Startup cut-off and a five-second enqueue grace prevent recovery from invalidating fresh work.
 - Photo/resize/video MediaStore transactions provide exact-row caught-failure/cancellation rollback. They are not durable across OS process death.
@@ -36,7 +37,7 @@
 
 ## Current git baseline
 
-- Work is on local `main` with a large uncommitted stack spanning Cycles 0–10. No commit, push, branch, remote, dependency, production ID, signing, or secret change was made.
+- Work is on local `main`. No push, branch, remote, dependency, production ID, signing, or secret change was made.
 - The original user-owned `TemplatePickerScreen.kt` change that keeps every template visible was preserved. Exact and larger layouts are actionable; smaller layouts also expose a click action for feedback but cannot apply because the current model has no safe overflow-media store.
 - All unrelated working-tree changes must continue to be preserved. Generated build output is not part of the intended diff.
 
@@ -58,6 +59,7 @@
 - Cycle 9: strict restoration, missing-media export guards, cancellation/resource/bitmap hardening, output pixel cap, actionable storage/codec errors, video preflight/playability/temp cleanup, and race-safe work recovery.
 - Cycle 10: combined release verification, app-open loading crash fix, release/manual/positioning docs, and blocker classification.
 - Post-Cycle 10 layout fixes: removed the favorite-overlay dead tap area; preserved selected images across exact/larger layout changes and partial-layout restoration; prevented smaller layouts from dropping media; and changed recents to require a substantive action on the active layout or successful export.
+- Product-gap completion: Privacy now survives Activity recreation, recent photo exports are reachable from Home, and completed video exports can be shared directly.
 
 ## Decisions and ADRs
 
@@ -73,8 +75,8 @@
 - MediaStore rollback is in-process. Process death can leave a pending row on API 29+ or a visible partial/orphan row on API 24–28.
 - Direct historical Room migrations from v1–v3 lack fixture coverage; confirm whether those schemas shipped.
 - Connected API 36 execution found and prompted the app-open logo crash fix. The post-fix suite now
-  passes all 39 instrumentation tests on the physical Samsung device.
-- Debug lint has 0 errors and 124 warnings/1 hint, mainly existing resource, deprecation, plural/KTX, and dependency-update findings.
+  passes all 42 instrumentation tests on the physical Samsung phone; the TV device was not used.
+- Debug lint has 0 errors and 127 warnings/1 hint, mainly existing resource, deprecation, plural/KTX, and dependency-update findings.
 - Release minification/resource shrinking are disabled by existing configuration.
 - Template discovery and resize instrumentation now use the actual labels, explicit nested-row
   scrolling, unique semantics, and explicit vertical scrolling; the prior four brittle assertions
@@ -102,11 +104,11 @@
 
 ## Tests already available
 
-- JVM: 245 test methods across 34 files, covering geometry, presets, resize stats, strict codecs, templates/ranking/application/use policy, navigation/state, all ad policies, export transactions/failure mapping, recovery, output caps, and work ownership.
-- Instrumentation: 39 methods across 13 files, covering first-session app-open persistence,
+- JVM: 248 test methods across 34 files, covering geometry, presets, resize stats, strict codecs, templates/ranking/application/use policy, navigation/state, all ad policies, export transactions/failure mapping, recovery, output caps, and work ownership.
+- Instrumentation: 42 methods across 14 files, covering first-session app-open persistence,
   Room/current migration chain, recents, route/activity recreation, Home, template discovery/card
-  hit targets/count handling, editor media visibility, resize reachability, and durable
-  interstitial preferences. All 39 pass on a physical API 36 Samsung.
+  hit targets/count handling, editor media visibility, resize reachability, video sharing, and durable
+  interstitial preferences. All 42 pass on a physical API 36 Samsung phone.
 - Missing: controlled OS death, real provider revocation/cloud media, historical v1→v3 migrations, actual MediaStore interruption, image goldens, Transformer media fixtures, real UMP/AdMob lifecycle, and accessibility/form-factor automation.
 
 ## Commands that passed or failed
@@ -128,6 +130,7 @@
   label, visibility, and non-unique matcher assumptions.
 - Passed: 35 focused layout application, action-qualified recents, draft restoration, discovery, catalog, and favorite JVM tests.
 - Passed: seven focused template-card/count/error/favorite/editor-media-visibility UI tests on both an API 37 emulator and API 36 Samsung device; production and Android-test compilation passed.
+- Passed: nine focused Privacy/Home/video-share instrumentation tests on the API 36 Samsung phone.
 
 ## Next recommended slice
 

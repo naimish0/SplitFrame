@@ -12,8 +12,10 @@ import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.unit.dp
 import com.rameshta.splitframe.data.RecentVideoProject
 import com.rameshta.splitframe.data.RecentVideoProjectStatus
+import com.rameshta.splitframe.domain.ExportResolution
 import com.rameshta.splitframe.domain.TemplateRepository
 import com.rameshta.splitframe.presentation.home.HomeUiState
+import com.rameshta.splitframe.presentation.home.RecentPhotoExport
 import com.rameshta.splitframe.ui.theme.SplitFrameTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -72,6 +74,7 @@ class HomeDashboardScreenTest {
         composeRule.onNodeWithText("Recent Projects").assertDoesNotExist()
         composeRule.onNodeWithText("Favorite Layouts").assertDoesNotExist()
         composeRule.onNodeWithText("Recently Used Layouts").assertDoesNotExist()
+        composeRule.onNodeWithText("Recent Photo Exports").assertDoesNotExist()
     }
 
     @Test
@@ -100,20 +103,36 @@ class HomeDashboardScreenTest {
         val recent = templates[1]
         val openedProjects = mutableListOf<String>()
         val openedLayouts = mutableListOf<String>()
+        val openedExports = mutableListOf<String>()
         setHome(
             state = HomeUiState.Ready(
                 continueProject = project("continue", "Current merge"),
                 recentProjects = listOf(project("recent", "Earlier merge")),
+                recentPhotoExports = listOf(
+                    RecentPhotoExport(
+                        id = "photo-1",
+                        savedUri = "content://media/photo-1",
+                        template = favorite,
+                        resolution = ExportResolution.FHD_1080,
+                        createdAtMillis = 2L,
+                    ),
+                ),
                 favoriteLayouts = listOf(favorite),
                 recentlyUsedLayouts = listOf(recent),
             ),
             onOpenVideoProject = openedProjects::add,
             onOpenLayout = openedLayouts::add,
+            onOpenRecentPhotoExport = openedExports::add,
         )
 
         homeList().performScrollToKey("home-recent-projects")
         composeRule.onNodeWithText("Recent Projects").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Open recent project Earlier merge")
+            .assertHasClickAction()
+            .performClick()
+        homeList().performScrollToKey("home-recent-photo-exports")
+        composeRule.onNodeWithText("Recent Photo Exports").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Open recent Side by side export at 1080p")
             .assertHasClickAction()
             .performClick()
         homeList().performScrollToKey("home-favorite-layouts")
@@ -130,6 +149,7 @@ class HomeDashboardScreenTest {
         composeRule.runOnIdle {
             assertEquals(listOf("recent"), openedProjects)
             assertEquals(listOf(favorite.id, recent.id), openedLayouts)
+            assertEquals(listOf("content://media/photo-1"), openedExports)
         }
     }
 
@@ -140,6 +160,7 @@ class HomeDashboardScreenTest {
         onOpenVideoProjects: () -> Unit = {},
         onOpenVideoProject: (String) -> Unit = {},
         onOpenLayout: (String) -> Unit = {},
+        onOpenRecentPhotoExport: (String) -> Unit = {},
     ) {
         composeRule.setContent {
             SplitFrameTheme {
@@ -150,6 +171,7 @@ class HomeDashboardScreenTest {
                     onOpenVideoProjects = onOpenVideoProjects,
                     onOpenVideoProject = onOpenVideoProject,
                     onOpenLayout = onOpenLayout,
+                    onOpenRecentPhotoExport = onOpenRecentPhotoExport,
                     onOpenPrivacyPolicy = {},
                 )
             }

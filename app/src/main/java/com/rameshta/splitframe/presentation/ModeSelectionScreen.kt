@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PhotoSizeSelectLarge
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -52,6 +53,7 @@ import com.rameshta.splitframe.data.RecentVideoProject
 import com.rameshta.splitframe.data.RecentVideoProjectStatus
 import com.rameshta.splitframe.domain.LayoutTemplate
 import com.rameshta.splitframe.presentation.home.HomeUiState
+import com.rameshta.splitframe.presentation.home.RecentPhotoExport
 import com.rameshta.splitframe.ui.components.SplitFrameTopAppBar
 import com.rameshta.splitframe.ui.theme.splitFrameDimens
 
@@ -63,6 +65,7 @@ fun ModeSelectionScreen(
     onOpenVideoProjects: () -> Unit,
     onOpenVideoProject: (String) -> Unit,
     onOpenLayout: (String) -> Unit,
+    onOpenRecentPhotoExport: (String) -> Unit,
     onOpenPrivacyPolicy: () -> Unit,
 ) {
     val dimens = splitFrameDimens()
@@ -164,6 +167,14 @@ fun ModeSelectionScreen(
                                 onSeeAll = onOpenVideoProjects,
                                 onOpenProject = onOpenVideoProject,
                                 onManageProject = onOpenVideoProjects,
+                            )
+                        }
+                    }
+                    if (state.recentPhotoExports.isNotEmpty()) {
+                        item(key = "home-recent-photo-exports") {
+                            RecentPhotoExportsSection(
+                                exports = state.recentPhotoExports,
+                                onOpenExport = onOpenRecentPhotoExport,
                             )
                         }
                     }
@@ -316,6 +327,87 @@ private fun DashboardMessageCard(
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentPhotoExportsSection(
+    exports: List<RecentPhotoExport>,
+    onOpenExport: (String) -> Unit,
+) {
+    val dimens = splitFrameDimens()
+    HomeSection(
+        title = stringResource(R.string.home_recent_photo_exports),
+        supportingText = stringResource(R.string.home_recent_photo_exports_desc),
+    ) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(dimens.space12),
+            contentPadding = PaddingValues(end = dimens.space4),
+        ) {
+            items(
+                items = exports,
+                key = { export -> "photo-export:${export.id}" },
+            ) { export ->
+                RecentPhotoExportCard(
+                    export = export,
+                    onClick = { onOpenExport(export.savedUri) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentPhotoExportCard(
+    export: RecentPhotoExport,
+    onClick: () -> Unit,
+) {
+    val dimens = splitFrameDimens()
+    val title = export.template?.titleText() ?: stringResource(R.string.home_photo_export)
+    val accessibilityLabel = stringResource(
+        R.string.home_open_photo_export_accessibility,
+        title,
+        export.resolution.label,
+    )
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .width(220.dp)
+            .heightIn(min = dimens.touchTarget)
+            .semantics(mergeDescendants = true) {
+                contentDescription = accessibilityLabel
+                role = Role.Button
+            },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(dimens.space12),
+            horizontalArrangement = Arrangement.spacedBy(dimens.space12),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.Image, contentDescription = null)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(dimens.space4),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = export.resolution.label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = DateUtils.getRelativeTimeSpanString(export.createdAtMillis).toString(),
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

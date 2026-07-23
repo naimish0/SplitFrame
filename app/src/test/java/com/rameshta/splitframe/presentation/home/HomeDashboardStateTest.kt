@@ -2,6 +2,8 @@ package com.rameshta.splitframe.presentation.home
 
 import com.rameshta.splitframe.data.RecentVideoProject
 import com.rameshta.splitframe.data.RecentVideoProjectStatus
+import com.rameshta.splitframe.data.local.ExportHistoryEntity
+import com.rameshta.splitframe.domain.ExportResolution
 import com.rameshta.splitframe.domain.TemplateRepository
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -21,12 +23,38 @@ class HomeDashboardStateTest {
             favoriteTemplateIds = listOf(favorite.id, favorite.id, "removed-layout"),
             recentTemplateIds = listOf(favorite.id, recent.id, recent.id, "removed-layout"),
             templates = templates,
+            recentExports = listOf(
+                export(
+                    id = "newest",
+                    templateId = favorite.id,
+                    savedUri = "content://media/newest",
+                    resolution = ExportResolution.FHD_1080,
+                    createdAtMillis = 40L,
+                ),
+                export(
+                    id = "bad-resolution",
+                    templateId = recent.id,
+                    savedUri = "content://media/bad",
+                    resolutionName = "REMOVED",
+                    createdAtMillis = 35L,
+                ),
+                export(
+                    id = "missing-template",
+                    templateId = "removed-layout",
+                    savedUri = "content://media/older",
+                    resolution = ExportResolution.HD_720,
+                    createdAtMillis = 30L,
+                ),
+            ),
         )
 
         assertEquals(resumable, state.continueProject)
         assertEquals(listOf(corrupt, other), state.recentProjects)
         assertEquals(listOf(favorite.id), state.favoriteLayouts.map { it.id })
         assertEquals(listOf(recent.id), state.recentlyUsedLayouts.map { it.id })
+        assertEquals(listOf("newest", "missing-template"), state.recentPhotoExports.map { it.id })
+        assertEquals(favorite.id, state.recentPhotoExports.first().template?.id)
+        assertEquals(null, state.recentPhotoExports.last().template)
     }
 
     @Test
@@ -41,6 +69,7 @@ class HomeDashboardStateTest {
         assertEquals(false, state.hasPersonalizedContent)
         assertEquals(null, state.continueProject)
         assertEquals(emptyList<RecentVideoProject>(), state.recentProjects)
+        assertEquals(emptyList<RecentPhotoExport>(), state.recentPhotoExports)
     }
 
     private fun project(
@@ -54,5 +83,20 @@ class HomeDashboardStateTest {
         updatedAtMillis = updatedAtMillis,
         mediaCount = if (status == RecentVideoProjectStatus.Ready) 2 else 0,
         status = status,
+    )
+
+    private fun export(
+        id: String,
+        templateId: String,
+        savedUri: String,
+        resolution: ExportResolution = ExportResolution.FHD_1080,
+        resolutionName: String = resolution.name,
+        createdAtMillis: Long,
+    ) = ExportHistoryEntity(
+        id = id,
+        templateId = templateId,
+        savedUri = savedUri,
+        resolution = resolutionName,
+        createdAtMillis = createdAtMillis,
     )
 }

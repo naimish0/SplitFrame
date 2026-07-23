@@ -51,6 +51,16 @@ class AppRouteTest {
     }
 
     @Test
+    fun privacyDestinationSurvivesStateRestoration() {
+        val restored = restoreAppRoute(
+            AppRoute(screen = AppScreen.PrivacyPolicy).savedValues(),
+        )
+
+        assertEquals(AppScreen.PrivacyPolicy, restored.screen)
+        assertNull(restored.activeVideoProjectId)
+    }
+
+    @Test
     fun corruptSavedVideoRouteFallsBackHomeWithoutAnId() {
         val restored = restoreAppRoute(
             listOf(AppScreen.VideoEditor.name, "deleted-or-malformed", true.toString()),

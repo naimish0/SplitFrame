@@ -17,6 +17,11 @@
     <string name="home_error_body">You can still create and export. Reopen SplitFrame to try loading saved work again.</string>
     <string name="home_continue_editing">Continue Editing</string>
     <string name="home_recent_projects">Recent Projects</string>
+    <string name="home_recent_photo_exports">Recent Photo Exports</string>
+    <string name="home_recent_photo_exports_desc">Collages saved recently on this device.</string>
+    <string name="home_photo_export">Photo collage</string>
+    <string name="home_open_photo_export_accessibility">Open recent %1$s export at %2$s</string>
+    <string name="home_recent_export_unavailable">This exported photo is no longer available. Remove it through app storage by clearing SplitFrame data.</string>
     <string name="home_favorite_layouts">Favorite Layouts</string>
     <string name="home_favorite_layouts_desc">Layouts saved as favorites on this device.</string>
     <string name="home_recent_layouts">Recently Used Layouts</string>
@@ -413,6 +418,7 @@
     <string name="video_export_queue_failed">Could not schedule video export. Try again.</string>
     <string name="video_export_worker_failed">Could not export this video.</string>
     <string name="video_share_subject">SplitFrame video export</string>
+    <string name="video_share_unavailable">No app is available to share this video.</string>
     <string name="app_open_ad_loading">Loading SplitFrame...</string>
     <string name="privacy_policy">Privacy policy</string>
     <string name="privacy_effective_date">Effective July 18, 2026</string>
