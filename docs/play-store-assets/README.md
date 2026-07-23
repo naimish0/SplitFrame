@@ -4,14 +4,15 @@ Package: `com.rameshta.splitframe`
 
 ## Upload Files
 
-- App icon: `app-icon-512.png` (`512 x 512`, 32-bit RGBA PNG)
+- App icon: `app-icon-512.png` (`512 x 512` RGB PNG), generated from the same
+  clean center mark in `ic_splitframe_logo.png` used by the launcher and splash screen
 - Feature graphic: `feature-graphic-1024x500.png` (`1024 x 500`)
 - Captioned screenshots: `screenshots/captioned/*.png` (`1080 x 1920`)
 - Localized release sets: `localized/<language>/`
   - Feature graphic: `feature-graphic-1024x500.png`
-  - Phone screenshots: `phone/01-*.png` through `phone/07-*.png` (`2160 x 3840`)
-  - 7-inch tablet screenshots: `tablet-7-inch/01-*.png` through `07-*.png` (`2160 x 3840`)
-  - 10-inch tablet screenshots: `tablet-10-inch/01-*.png` through `07-*.png` (`2160 x 3840`)
+  - Phone screenshots: `phone/01-*.png` through `phone/08-*.png` (`2160 x 3840`)
+  - 7-inch tablet screenshots: `tablet-7-inch/01-*.png` through `08-*.png` (`2160 x 3840`)
+  - 10-inch tablet screenshots: `tablet-10-inch/01-*.png` through `08-*.png` (`2160 x 3840`)
   - Complete feature overview in every device folder: `content-sheet-all-features.png`
 - Deployable privacy policy: `privacy-policy.html`
 - Markdown policy source: `privacy-policy-draft.md`
@@ -20,9 +21,10 @@ Package: `com.rameshta.splitframe`
 
 Use `screenshots/captioned/` for the Play Store gallery. These screenshots include marketing captions and exclude ad areas.
 
-For a localized listing, upload the seven screenshots and feature graphic from the matching
+For a localized listing, upload the eight screenshots and feature graphic from the matching
 `localized/<language>/` folder. The content sheet is a review/reference asset and intentionally
-contains all seven features; it is not part of the ordered Play Store screenshot upload.
+contains all eight feature screens, including Resize Image; it is not part of the ordered Play
+Store screenshot upload.
 
 Supported language folders are `en`, `de`, `fr`, `ja`, `hi`, `ru`, `es`, `pt-PT`, `pt-BR`, `it`,
 `id`, `ar`, `ko`, and `ur`.
@@ -68,6 +70,7 @@ SplitFrame is built for fast everyday edits without complicated timelines or hea
 5. `screenshots/captioned/05-multi-panel-layouts-captioned.png` - More Grid Choices
 6. `screenshots/captioned/06-adaptive-grids-captioned.png` - Layouts for Big Sets
 7. `screenshots/captioned/07-grid-editor-captioned.png` - Edit 15-Photo Grids
+8. `screenshots/captioned/08-resize-image-captioned.png` - Resize Images Precisely
 
 Caption text is listed in `screenshot-captions.md`.
 

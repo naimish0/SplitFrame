@@ -8,7 +8,8 @@
       ["Fine-Tune Every Frame", "Crop, position, style, and export lossless PNG"],
       ["More Grid Choices", "Pick split frames, triptychs, mosaics, and grids"],
       ["Layouts for Big Sets", "Adaptive grids support up to 15 photos"],
-      ["Edit 15-Photo Grids", "Add many photos and tune every cell"]
+      ["Edit 15-Photo Grids", "Add many photos and tune every cell"],
+      ["Resize Images Precisely", "Use presets, custom sizes, Fit or Fill, and export controls"]
     ]
   },
   "de": {
@@ -20,7 +21,8 @@
       ["Jeden Rahmen optimieren", "Zuschneiden, positionieren und verlustfrei exportieren"],
       ["Mehr Rasterauswahl", "Teilungen, Triptychen, Mosaike und Raster"],
       ["Layouts für große Sets", "Adaptive Raster für bis zu 15 Fotos"],
-      ["15-Foto-Raster bearbeiten", "Viele Fotos hinzufügen und jede Zelle anpassen"]
+      ["15-Foto-Raster bearbeiten", "Viele Fotos hinzufügen und jede Zelle anpassen"],
+      ["Bilder präzise skalieren", "Vorgaben, eigene Größen, Einpassen oder Füllen und Export"]
     ]
   },
   "fr": {
@@ -32,7 +34,8 @@
       ["Ajustez chaque cadre", "Recadrez, placez, stylisez et exportez sans perte"],
       ["Plus de choix de grilles", "Cadres divisés, triptyques, mosaïques et grilles"],
       ["Des grilles pour les grands lots", "Jusqu’à 15 photos dans des grilles adaptatives"],
-      ["Modifiez des grilles de 15 photos", "Ajoutez vos photos et ajustez chaque cellule"]
+      ["Modifiez des grilles de 15 photos", "Ajoutez vos photos et ajustez chaque cellule"],
+      ["Redimensionnez avec précision", "Préréglages, dimensions personnalisées, ajustement et export"]
     ]
   },
   "ja": {
@@ -44,7 +47,8 @@
       ["すべてのフレームを調整", "切り抜き、配置、スタイル、ロスレス出力"],
       ["豊富なグリッド", "分割、三連、モザイク、グリッドから選択"],
       ["たくさんの写真に対応", "最大15枚のアダプティブグリッド"],
-      ["15枚グリッドを編集", "写真を追加して各セルを細かく調整"]
+      ["15枚グリッドを編集", "写真を追加して各セルを細かく調整"],
+      ["画像を正確にサイズ変更", "プリセット、カスタムサイズ、フィット・塗りつぶし、書き出し"]
     ]
   },
   "hi": {
@@ -56,7 +60,8 @@
       ["हर फ़्रेम को बेहतर बनाएँ", "क्रॉप, पोज़िशन, स्टाइल और लॉसलेस निर्यात"],
       ["अधिक ग्रिड विकल्प", "स्प्लिट फ़्रेम, ट्रिप्टिक, मोज़ेक और ग्रिड"],
       ["बड़े सेट के लिए लेआउट", "अधिकतम 15 फ़ोटो के अनुकूल ग्रिड"],
-      ["15-फ़ोटो ग्रिड संपादित करें", "कई फ़ोटो जोड़ें और हर सेल को सुधारें"]
+      ["15-फ़ोटो ग्रिड संपादित करें", "कई फ़ोटो जोड़ें और हर सेल को सुधारें"],
+      ["तस्वीरों का सटीक आकार बदलें", "प्रीसेट, कस्टम आकार, फ़िट या फ़िल और निर्यात नियंत्रण"]
     ]
   },
   "ru": {
@@ -68,7 +73,8 @@
       ["Настраивайте каждый кадр", "Кадрирование, позиция, стиль и экспорт без потерь"],
       ["Больше вариантов сетки", "Разделения, триптихи, мозаики и сетки"],
       ["Макеты для больших наборов", "Адаптивные сетки до 15 фотографий"],
-      ["Редактируйте сетки из 15 фото", "Добавляйте фото и настраивайте каждую ячейку"]
+      ["Редактируйте сетки из 15 фото", "Добавляйте фото и настраивайте каждую ячейку"],
+      ["Точно меняйте размер изображений", "Пресеты, свои размеры, режимы вписать или заполнить и экспорт"]
     ]
   },
   "es": {
@@ -80,7 +86,8 @@
       ["Ajusta cada marco", "Recorta, coloca, estiliza y exporta sin pérdidas"],
       ["Más opciones de cuadrícula", "Marcos divididos, trípticos, mosaicos y cuadrículas"],
       ["Diseños para grandes grupos", "Cuadrículas adaptables de hasta 15 fotos"],
-      ["Edita cuadrículas de 15 fotos", "Añade fotos y ajusta cada celda"]
+      ["Edita cuadrículas de 15 fotos", "Añade fotos y ajusta cada celda"],
+      ["Redimensiona con precisión", "Usa ajustes, tamaños personalizados, encaje o relleno y exportación"]
     ]
   },
   "pt-PT": {
@@ -92,7 +99,8 @@
       ["Ajuste cada moldura", "Recorte, posicione, estilize e exporte sem perdas"],
       ["Mais opções de grelha", "Molduras divididas, trípticos, mosaicos e grelhas"],
       ["Layouts para grandes conjuntos", "Grelhas adaptáveis para até 15 fotografias"],
-      ["Edite grelhas de 15 fotografias", "Adicione fotografias e ajuste cada célula"]
+      ["Edite grelhas de 15 fotografias", "Adicione fotografias e ajuste cada célula"],
+      ["Redimensione com precisão", "Use predefinições, tamanhos próprios, Ajustar ou Preencher e exportar"]
     ]
   },
   "pt-BR": {
@@ -104,7 +112,8 @@
       ["Ajuste cada quadro", "Recorte, posicione, estilize e exporte sem perdas"],
       ["Mais opções de grade", "Quadros divididos, trípticos, mosaicos e grades"],
       ["Layouts para grandes conjuntos", "Grades adaptáveis para até 15 fotos"],
-      ["Edite grades de 15 fotos", "Adicione fotos e ajuste cada célula"]
+      ["Edite grades de 15 fotos", "Adicione fotos e ajuste cada célula"],
+      ["Redimensione com precisão", "Use predefinições, tamanhos personalizados, Ajustar ou Preencher e exportar"]
     ]
   },
   "it": {
@@ -116,7 +125,8 @@
       ["Perfeziona ogni riquadro", "Ritaglia, posiziona, applica stili ed esporta senza perdita"],
       ["Più opzioni per le griglie", "Riquadri divisi, trittici, mosaici e griglie"],
       ["Layout per grandi raccolte", "Griglie adattive fino a 15 foto"],
-      ["Modifica griglie da 15 foto", "Aggiungi foto e regola ogni cella"]
+      ["Modifica griglie da 15 foto", "Aggiungi foto e regola ogni cella"],
+      ["Ridimensiona con precisione", "Usa preset, dimensioni personalizzate, Adatta o Riempi ed esporta"]
     ]
   },
   "id": {
@@ -128,7 +138,8 @@
       ["Sempurnakan Setiap Bingkai", "Pangkas, atur, beri gaya, dan ekspor tanpa kehilangan"],
       ["Lebih Banyak Pilihan Kisi", "Pilih bingkai belah, triptik, mosaik, dan kisi"],
       ["Tata Letak untuk Banyak Foto", "Kisi adaptif mendukung hingga 15 foto"],
-      ["Edit Kisi 15 Foto", "Tambahkan banyak foto dan sesuaikan setiap sel"]
+      ["Edit Kisi 15 Foto", "Tambahkan banyak foto dan sesuaikan setiap sel"],
+      ["Ubah Ukuran dengan Presisi", "Gunakan preset, ukuran khusus, Pas atau Isi, dan kontrol ekspor"]
     ]
   },
   "ar": {
@@ -140,7 +151,8 @@
       ["حسّن كل إطار", "اقتصّ وحرّك ونسّق وصدّر دون فقدان الجودة"],
       ["خيارات شبكات أكثر", "إطارات مقسمة وثلاثيات وفسيفساء وشبكات"],
       ["تخطيطات للمجموعات الكبيرة", "شبكات متكيفة لما يصل إلى 15 صورة"],
-      ["حرّر شبكة من 15 صورة", "أضف الصور واضبط كل خلية"]
+      ["حرّر شبكة من 15 صورة", "أضف الصور واضبط كل خلية"],
+      ["غيّر حجم الصور بدقة", "استخدم الإعدادات والأحجام المخصصة والملاءمة أو الملء والتصدير"]
     ]
   },
   "ko": {
@@ -152,7 +164,8 @@
       ["모든 프레임 세밀하게 조정", "자르기, 위치, 스타일 및 무손실 내보내기"],
       ["더 다양한 그리드", "분할 프레임, 삼면화, 모자이크 및 그리드"],
       ["많은 사진을 위한 레이아웃", "최대 15장의 적응형 그리드"],
-      ["15장 사진 그리드 편집", "사진을 추가하고 각 셀을 조정"]
+      ["15장 사진 그리드 편집", "사진을 추가하고 각 셀을 조정"],
+      ["이미지를 정확하게 크기 조절", "프리셋, 사용자 크기, 맞춤 또는 채우기와 내보내기 설정"]
     ]
   },
   "ur": {
@@ -164,7 +177,8 @@
       ["ہر فریم بہتر بنائیں", "کراپ، پوزیشن، اسٹائل اور بغیر نقصان برآمد"],
       ["مزید گرڈ انتخاب", "تقسیم شدہ فریم، ٹرپٹک، موزیک اور گرڈ"],
       ["بڑے مجموعوں کے لیے لے آؤٹ", "زیادہ سے زیادہ 15 تصاویر کے موافق گرڈ"],
-      ["15 تصاویر کا گرڈ ایڈٹ کریں", "تصاویر شامل کریں اور ہر سیل بہتر بنائیں"]
+      ["15 تصاویر کا گرڈ ایڈٹ کریں", "تصاویر شامل کریں اور ہر سیل بہتر بنائیں"],
+      ["تصاویر کا سائز درستگی سے بدلیں", "پری سیٹ، حسب ضرورت سائز، فٹ یا فل اور برآمد کنٹرول استعمال کریں"]
     ]
   }
 }

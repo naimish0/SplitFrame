@@ -30,6 +30,10 @@ Use these captioned images for the Play Store screenshot gallery:
    - Caption: Edit 15-Photo Grids
    - Subcaption: Add many photos and tune each cell
 
+8. `screenshots/captioned/08-resize-image-captioned.png`
+   - Caption: Resize Images Precisely
+   - Subcaption: Presets, custom sizes, Fit or Fill, formats, quality, and target size
+
 Plain captions, if Play Console text fields or marketing notes need them:
 
 - Create photo collages and merge multiple videos into one MP4.
@@ -39,5 +43,6 @@ Plain captions, if Play Console text fields or marketing notes need them:
 - Pick split frames, triptychs, mosaics, and grids.
 - Use adaptive grid layouts for up to 15 photos.
 - Edit 15-photo grids and fine-tune each cell.
+- Resize images with presets, custom dimensions, Fit or Fill, output format, quality, and target size.
 
 These captions intentionally do not mention ads, sponsorships, or monetization.

@@ -52,7 +52,7 @@ def validate_locale(locale: str, sheets_only: bool = False, features_only: bool 
     for folder, expected_size in EXPECTED.items():
         device_root = locale_root / folder
         screenshots = sorted(device_root.glob("[0-9][0-9]-*.png"))
-        assert len(screenshots) == 7, (device_root, len(screenshots))
+        assert len(screenshots) == 8, (device_root, len(screenshots))
         if not sheets_only:
             for screenshot in screenshots:
                 optimize(screenshot, expected_size)

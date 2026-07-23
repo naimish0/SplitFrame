@@ -3,13 +3,18 @@ package com.rameshta.splitframe.presentation.video
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
+import com.rameshta.splitframe.ads.ExternalUiLauncher
+import com.rameshta.splitframe.ads.ExternalUiReason
+import com.rameshta.splitframe.ads.LocalExternalUiLauncher
 import com.rameshta.splitframe.data.DeleteVideoProjectResult
 import com.rameshta.splitframe.domain.ExportResult
 import com.rameshta.splitframe.domain.VideoMergeProject
@@ -42,6 +47,36 @@ class VideoShareActionTest {
         composeRule.onNodeWithText("Share")
             .performScrollTo()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun emptyPreviewCardOpensTheVideoPicker() {
+        var launchedReason: ExternalUiReason? = null
+        composeRule.setContent {
+            CompositionLocalProvider(
+                LocalExternalUiLauncher provides ExternalUiLauncher { reason, _ ->
+                    launchedReason = reason
+                },
+            ) {
+                SplitFrameTheme {
+                    VideoEditorScreen(
+                        state = VideoMergeState(
+                            project = VideoMergeProject(id = "empty-preview-project"),
+                        ),
+                        onIntent = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("Add videos to preview")
+            .assertIsDisplayed()
+            .performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(ExternalUiReason.MediaPicker, launchedReason)
+        }
     }
 
     @Test

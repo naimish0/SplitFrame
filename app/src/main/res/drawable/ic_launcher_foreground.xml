@@ -4,5 +4,5 @@
     android:antialias="true"
     android:filter="true"
     android:gravity="fill"
-    android:src="@drawable/ic_launcher_foreground_artwork"
+    android:src="@drawable/ic_splitframe_logo"
     tools:ignore="IconLauncherShape" />

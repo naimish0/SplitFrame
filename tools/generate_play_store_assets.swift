@@ -37,6 +37,7 @@ let sourceNames = [
     "05-multi-panel-layouts-captioned.png",
     "06-adaptive-grids-captioned.png",
     "07-grid-editor-captioned.png",
+    "08-resize-image-captioned.png",
 ]
 let sourceImages = try sourceNames.map { name -> NSImage in
     let url = sourceRoot.appendingPathComponent(name)

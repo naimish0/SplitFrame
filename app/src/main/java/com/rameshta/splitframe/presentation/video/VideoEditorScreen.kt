@@ -81,6 +81,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -252,6 +253,7 @@ fun VideoEditorScreen(
                     FixedPreviewPane(
                         state = state,
                         onIntent = onIntent,
+                        onPickMedia = pickMixed,
                         modifier = Modifier
                             .weight(1.2f)
                             .fillMaxHeight(),
@@ -285,6 +287,7 @@ fun VideoEditorScreen(
                     FixedPreviewPane(
                         state = state,
                         onIntent = onIntent,
+                        onPickMedia = pickMixed,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 220.dp, max = 380.dp),
@@ -309,6 +312,7 @@ fun VideoEditorScreen(
 private fun FixedPreviewPane(
     state: VideoMergeState,
     onIntent: (VideoMergeIntent) -> Unit,
+    onPickMedia: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -318,6 +322,7 @@ private fun FixedPreviewPane(
         VideoPreviewCanvas(
             state = state,
             onIntent = onIntent,
+            onPickMedia = onPickMedia,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(state.project?.canvasAspectRatio?.ratio ?: 16f / 9f),
@@ -381,6 +386,7 @@ private fun PlaybackControls(
 private fun VideoPreviewCanvas(
     state: VideoMergeState,
     onIntent: (VideoMergeIntent) -> Unit,
+    onPickMedia: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val project = state.project ?: return
@@ -407,6 +413,7 @@ private fun VideoPreviewCanvas(
     }
     val activeMedia = activeCellIndex?.let { project.mediaByCell[it] as? MediaSource.Video }
     val currentActiveMedia by rememberUpdatedState(activeMedia)
+    val canPickMediaFromPreview = clips.isEmpty() && !state.isExporting
     val previewDescription = timelinePosition?.let { position ->
         stringResource(R.string.video_sequence_preview, position.clipIndex + 1, clips.size)
     } ?: stringResource(R.string.video_empty_sequence_preview)
@@ -499,6 +506,11 @@ private fun VideoPreviewCanvas(
             modifier = Modifier
                 .fillMaxSize()
                 .semantics { contentDescription = previewDescription }
+                .clickable(
+                    enabled = canPickMediaFromPreview,
+                    role = Role.Button,
+                    onClick = onPickMedia,
+                )
                 .pointerInput(activeMedia?.id, activeCellIndex) {
                     val media = currentActiveMedia ?: return@pointerInput
                     val cellIndex = activeCellIndex ?: return@pointerInput
