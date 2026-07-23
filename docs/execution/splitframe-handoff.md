@@ -72,10 +72,13 @@
 - Final publish signing is external/unconfigured; `assembleRelease` produces build evidence, not a publish-signed artifact.
 - MediaStore rollback is in-process. Process death can leave a pending row on API 29+ or a visible partial/orphan row on API 24–28.
 - Direct historical Room migrations from v1–v3 lack fixture coverage; confirm whether those schemas shipped.
-- Connected API 36 execution found and prompted the app-open logo crash fix, but the post-fix rerun was blocked when the wireless device entered doze and then became ADB-offline.
+- Connected API 36 execution found and prompted the app-open logo crash fix. The post-fix suite now
+  passes all 39 instrumentation tests on the physical Samsung device.
 - Debug lint has 0 errors and 124 warnings/1 hint, mainly existing resource, deprecation, plural/KTX, and dependency-update findings.
 - Release minification/resource shrinking are disabled by existing configuration.
-- Two unrelated existing `TemplateDiscoveryScreenTest` methods are brittle on the API 37 emulator: a nested lazy-row `Favorites` chip is not composed for `performScrollTo`, and a non-unique recommendation-text matcher finds six nodes. The focused card/favorite tap tests pass.
+- Template discovery and resize instrumentation now use the actual labels, explicit nested-row
+  scrolling, unique semantics, and explicit vertical scrolling; the prior four brittle assertions
+  pass in both focused and full API 36 runs.
 
 ## Current risks
 
@@ -90,7 +93,6 @@
 
 ## Pending work
 
-- Reconnect an unlocked API 36 target and pass all 32 instrumentation tests after the app-open logo fix.
 - Execute every P0 row in `docs/qa/manual-test-matrix.md` on API 24/28, 29, 33, and 36, including network-off and limited-storage cases.
 - Decide whether to implement durable MediaStore publication journaling/reconciliation or explicitly accept the process-death risk.
 - Confirm shipped Room versions; add v1/v2/v3 fixtures when required.
@@ -101,8 +103,10 @@
 ## Tests already available
 
 - JVM: 245 test methods across 34 files, covering geometry, presets, resize stats, strict codecs, templates/ranking/application/use policy, navigation/state, all ad policies, export transactions/failure mapping, recovery, output caps, and work ownership.
-- Instrumentation: 38 methods across 12 files, covering Room/current migration chain, recents, route/activity recreation, Home, template discovery/card hit targets/count handling, editor media visibility, resize reachability, and durable interstitial preferences.
-- Last fully passed connected baseline before Cycles 4–10: 15 tests on a physical API 36 Samsung. Newer instrumentation compiles but needs a post-fix complete execution.
+- Instrumentation: 39 methods across 13 files, covering first-session app-open persistence,
+  Room/current migration chain, recents, route/activity recreation, Home, template discovery/card
+  hit targets/count handling, editor media visibility, resize reachability, and durable
+  interstitial preferences. All 39 pass on a physical API 36 Samsung.
 - Missing: controlled OS death, real provider revocation/cloud media, historical v1→v3 migrations, actual MediaStore interruption, image goldens, Transformer media fixtures, real UMP/AdMob lifecycle, and accessibility/form-factor automation.
 
 ## Commands that passed or failed
@@ -114,16 +118,19 @@
 - Initial Cycle 10 combined JVM run: 235 tests, one new photo pixel-cap rounding failure. `PhotoGeometryParityTest` passed after truncation-safe clamping; both later video fallback/recovery tests passed targeted reruns.
 - Passed: `:app:lintDebug` — 0 errors, 124 warnings, 1 hint after API-24 Base64 and Media3 opt-in fixes.
 - Passed twice: fresh `:app:assembleRelease`; final run includes all production fixes and release lint-vital.
-- Connected API 36 failed first on a real app-open cold-surface crash caused by an inset drawable; production now uses a raster resource.
+- Connected API 36 failed first on a real app-open cold-surface crash caused by an inset drawable;
+  production now uses a raster resource and the full 39-test rerun passes.
 - Connected post-fix attempts did not produce product assertion evidence: the device was screen-off/dozing, then wireless ADB became offline. Android-test compilation remained successful.
 - Passed: targeted recovery policy after startup-cutoff/enqueue-grace change; targeted video transaction after disabling encoder fallback.
 - Passed: 14 focused template discovery/favorite/recent-use JVM tests; debug production and Android-test compilation.
 - Passed: focused layout-card and favorite-action tap tests on an API 37 emulator and API 36 Samsung device, including the disabled-favorite overlay hit region.
-- Existing non-targeted template-discovery UI checks still contain the two brittle assertion failures documented above.
+- Passed: all template-discovery and resize UI checks after replacing brittle nested-scroll,
+  label, visibility, and non-unique matcher assumptions.
 - Passed: 35 focused layout application, action-qualified recents, draft restoration, discovery, catalog, and favorite JVM tests.
 - Passed: seven focused template-card/count/error/favorite/editor-media-visibility UI tests on both an API 37 emulator and API 36 Samsung device; production and Android-test compilation passed.
 
 ## Next recommended slice
 
-- Release-blocking validation slice: reconnect an unlocked API 36 device, complete the 32-test connected suite, then run the P0 process-death/MediaStore and real codec/provider matrix. Do not add product features.
+- Release-blocking validation slice: run the P0 process-death/MediaStore and real codec/provider
+  matrix across the required API levels. Do not add product features.
 - If process-death output artifacts reproduce, propose a small durable publication journal/reconciler design for explicit approval because it affects persistence and cleanup authority.

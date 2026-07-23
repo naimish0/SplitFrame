@@ -4,8 +4,6 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.hasSetTextAction
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -88,7 +86,7 @@ class SingleImageProcessingReachabilityTest {
         composeRule.onNodeWithText("Select photo").assertIsDisplayed()
         composeRule.onNodeWithText("Save").performScrollTo().assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithText("Quality mode").fetchSemanticsNodes().isEmpty())
-        composeRule.onNodeWithText("Export preset").assertIsDisplayed()
+        composeRule.onNodeWithText("Export preset").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Instagram Square Post — 1080 × 1080")
             .performScrollTo()
             .assertIsDisplayed()
@@ -183,10 +181,10 @@ class SingleImageProcessingReachabilityTest {
             }
         }
 
-        composeRule.onNode(hasText("Width px") and hasSetTextAction())
+        composeRule.onNodeWithText("Width px")
             .performScrollTo()
             .assertIsNotEnabled()
-        composeRule.onNode(hasText("Height px") and hasSetTextAction())
+        composeRule.onNodeWithText("Height px")
             .assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Lock aspect ratio")
             .assertIsNotEnabled()

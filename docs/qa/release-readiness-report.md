@@ -7,7 +7,11 @@ Status values are **Passed**, **Failed**, **Blocked**, **Manual verification req
 
 ## Release decision
 
-**Not ready for Play publication.** The current source compiles as a release APK, focused and combined JVM evidence passes, and lint has no errors. Publication remains blocked by external release signing and an incomplete connected-device rerun after wireless ADB became offline. Process-death MediaStore durability, real codecs/providers, UMP/AdMob callbacks, accessibility, and API-level coverage also remain manual release gates.
+**Not ready for Play publication.** The current source compiles as a release APK, focused and
+combined JVM evidence passes, lint has no errors, and all 39 instrumentation tests pass on a
+physical API 36 Samsung. Publication remains blocked by external release signing. Process-death
+MediaStore durability, real codecs/providers, UMP/AdMob callbacks, accessibility, and broader
+API-level coverage also remain manual release gates.
 
 ## Build and code
 
@@ -18,7 +22,7 @@ Status values are **Passed**, **Failed**, **Blocked**, **Manual verification req
 | JVM tests | Passed | 237 current test methods across 32 files. The combined run executed 235 and exposed one pixel-cap rounding regression; that fix and both subsequently added regressions passed targeted reruns. |
 | Static analysis | Passed | `:app:lintDebug`: 0 errors, 124 warnings, 1 hint. |
 | Instrumentation source compilation | Passed | 32 tests across 12 files compile. |
-| Connected instrumentation | Blocked | The first API 36 run exposed an app-open loading-logo crash, which was fixed. The rerun was interrupted by device doze, then wireless ADB became offline before a post-fix suite could complete. |
+| Connected instrumentation | Passed on API 36 | All 39 tests pass on a physical Samsung API 36 device after the app-open loading-logo and brittle matcher/scroll fixes. |
 | Accidental debug code | Passed | No new `BuildConfig.DEBUG` bypass, localhost endpoint, test-only import in main, stack trace printing, or test-device override was found. |
 | Credentials/secrets | Passed | No credential-shaped material or signing secret was added; production identifiers were not changed or copied into docs. |
 | Ad ID routing | Passed | Debug ad units remain official Google test inventory; release units remain the unmodified production configuration. |
@@ -71,7 +75,7 @@ Status values are **Passed**, **Failed**, **Blocked**, **Manual verification req
 | Creative tools | Passed | Text, four background families, three border families, five crop shapes, Auto Arrange, drag/swap accessibility actions, and actual resize comparison are reachable. |
 | Back/navigation restoration | Passed | Saveable routes preserve Home/Template callers and exact video projects. |
 | Light/dark, large font, TalkBack, touch, insets | Manual verification required | Source uses Material 3 semantics/targets/insets; runtime focus order, clipping, contrast, 200% font, and form-factor coverage remain open. |
-| Loading/empty/error states | Passed | Implemented across Home, discovery, recents, editors, resize, and ads; connected verification is incomplete. |
+| Loading/empty/error states | Passed | Implemented across Home, discovery, recents, editors, resize, and ads; applicable connected assertions pass on API 36. |
 
 ## Advertising and privacy
 
@@ -79,8 +83,8 @@ Status values are **Passed**, **Failed**, **Blocked**, **Manual verification req
 |---|---|---|
 | UMP eligibility/privacy entry | Passed | All formats share consent state; privacy options are exposed when required. Real geography/console behavior is manual. |
 | Workflow interstitials | Passed | Stable workflow IDs count committed successes only; one opportunity follows every second unique success and never blocks output. |
-| App-open policy | Passed | Cold/qualified return windows, four-hour cap, external-UI/export/config suppression, late-ad expiry, and full-screen separation are centralized. |
-| App-open loading surface | Passed | Device gate found the inset-drawable crash; it now uses a Compose-compatible raster logo. Post-fix full device suite is blocked by offline ADB. |
+| App-open policy | Passed | First-session exclusion, cold/qualified return windows, four-hour cap, external-UI/export/config suppression, late-ad expiry, and full-screen separation are centralized. |
+| App-open loading surface | Passed | Device testing found the inset-drawable crash; it now uses a Compose-compatible raster logo, and the post-fix 39-test API 36 suite passes. |
 | Banner lifecycle/placement | Passed | One adaptive anchored banner is limited to safe browsing surfaces with reserved layout and lifecycle disposal. |
 | Native lifecycle/placement | Passed | Stable insertion after organic content, caps, attribution/AdChoices, and explicit destruction are implemented. |
 | Real SDK/UMP/no-fill/click callbacks | Manual verification required | Run with official test inventory and UMP test geography on physical devices. |
@@ -90,7 +94,7 @@ Status values are **Passed**, **Failed**, **Blocked**, **Manual verification req
 ## Release blockers and exit criteria
 
 1. Produce and inspect a publisher-signed release AAB with approved versioning.
-2. Reconnect an unlocked device and complete all 32 current instrumentation tests after the app-open logo fix.
+2. Repeat applicable connected and manual coverage on the required API 24/28, 29, and 33 targets.
 3. Resolve or explicitly accept the process-death MediaStore durability risk, especially for API 24–28.
 4. Establish whether v1–v3 database versions shipped; add migration fixtures if they did.
 5. Complete P0 manual tests in `manual-test-matrix.md` on API 24/28, 29, 33, and 36, including low storage, revoked URIs, offline use, and representative codecs.

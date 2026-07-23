@@ -43,15 +43,7 @@ class SplitFrameAdManager internal constructor(
     private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val preferences =
         context.getSharedPreferences(SplitFrameAdPreferencesName, Context.MODE_PRIVATE)
-    private val firstSessionAppOpenGate = FirstSessionAppOpenGate(
-        hasCompletedFirstSession =
-            preferences.getBoolean(FirstSessionCompletedPreferenceKey, false),
-        markFirstSessionCompleted = {
-            preferences.edit()
-                .putBoolean(FirstSessionCompletedPreferenceKey, true)
-                .apply()
-        },
-    )
+    private val firstSessionAppOpenGate = createFirstSessionAppOpenGate(preferences)
 
     private val _fullScreenAdState = MutableStateFlow(FullScreenAdState.Idle)
     internal val fullScreenAdState: StateFlow<FullScreenAdState> = _fullScreenAdState.asStateFlow()

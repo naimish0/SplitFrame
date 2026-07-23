@@ -279,6 +279,9 @@ fun TemplatePickerScreen(
 }
 
 internal const val TemplatePickerGridTestTag = "template-picker-grid"
+internal const val TemplateCollectionFilterRowTestTag = "template-collection-filter-row"
+internal const val TemplateAspectFilterRowTestTag = "template-aspect-filter-row"
+internal const val TemplateMediaCountFilterRowTestTag = "template-media-count-filter-row"
 
 @Composable
 private fun TemplateNativeAd() {
@@ -357,7 +360,10 @@ private fun TemplateDiscoveryControls(
         }
 
         FilterLabel(stringResource(R.string.template_collection_filter))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(dimens.space8)) {
+        LazyRow(
+            modifier = Modifier.testTag(TemplateCollectionFilterRowTestTag),
+            horizontalArrangement = Arrangement.spacedBy(dimens.space8),
+        ) {
             rowItems(TemplateCollection.entries, key = TemplateCollection::name) { collection ->
                 FilterChip(
                     selected = filter.collection == collection,
@@ -368,7 +374,10 @@ private fun TemplateDiscoveryControls(
         }
 
         FilterLabel(stringResource(R.string.template_aspect_filter))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(dimens.space8)) {
+        LazyRow(
+            modifier = Modifier.testTag(TemplateAspectFilterRowTestTag),
+            horizontalArrangement = Arrangement.spacedBy(dimens.space8),
+        ) {
             rowItems(TemplateAspectFilter.entries, key = TemplateAspectFilter::name) { aspect ->
                 FilterChip(
                     selected = filter.aspect == aspect,
@@ -379,7 +388,10 @@ private fun TemplateDiscoveryControls(
         }
 
         FilterLabel(stringResource(R.string.template_media_count_filter))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(dimens.space8)) {
+        LazyRow(
+            modifier = Modifier.testTag(TemplateMediaCountFilterRowTestTag),
+            horizontalArrangement = Arrangement.spacedBy(dimens.space8),
+        ) {
             item(key = "any-media-count") {
                 FilterChip(
                     selected = filter.mediaCount == null,

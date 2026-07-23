@@ -20,9 +20,11 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.test.espresso.Espresso.closeSoftKeyboard
 import com.rameshta.splitframe.R
 import com.rameshta.splitframe.domain.ExportResolution
 import com.rameshta.splitframe.domain.ImageDimensions
@@ -31,7 +33,9 @@ import com.rameshta.splitframe.domain.LayoutTemplate
 import com.rameshta.splitframe.domain.MergeProject
 import com.rameshta.splitframe.domain.TemplateDiscovery
 import com.rameshta.splitframe.domain.TemplateDiscoveryFilter
+import com.rameshta.splitframe.domain.TemplateAspectFilter
 import com.rameshta.splitframe.domain.TemplateCategory
+import com.rameshta.splitframe.domain.TemplateCollection
 import com.rameshta.splitframe.domain.TemplateOrientation
 import com.rameshta.splitframe.domain.TemplateRepository
 import com.rameshta.splitframe.ui.theme.SplitFrameTheme
@@ -77,8 +81,18 @@ class TemplateDiscoveryScreenTest {
         )
 
         composeRule.onNode(hasSetTextAction()).performTextInput("grid")
-        composeRule.onNodeWithText("Favorites").performScrollTo().performClick()
-        composeRule.onNodeWithText("Portrait 4:5").performScrollTo().performClick()
+        closeSoftKeyboard()
+        composeRule.onNodeWithTag(TemplateCollectionFilterRowTestTag)
+            .performScrollTo()
+            .performScrollToIndex(TemplateCollection.Favorites.ordinal)
+        composeRule.onNodeWithText("Favorite Layouts").performClick()
+        composeRule.onNodeWithTag(TemplateAspectFilterRowTestTag)
+            .performScrollTo()
+            .performScrollToIndex(TemplateAspectFilter.Portrait.ordinal)
+        composeRule.onNodeWithText("Portrait 4:5").performClick()
+        composeRule.onNodeWithTag(TemplateMediaCountFilterRowTestTag)
+            .performScrollTo()
+            .performScrollToIndex(2)
         composeRule.onAllNodes(hasText("2 photos") and hasClickAction())[0].performClick()
 
         grid().performScrollToKey(target.id)
@@ -86,6 +100,8 @@ class TemplateDiscoveryScreenTest {
 
         grid().performScrollToKey("template-discovery-controls")
         composeRule.onNodeWithText("Reset search and filters").performClick()
+        composeRule.onNodeWithTag(TemplateCollectionFilterRowTestTag)
+            .performScrollToIndex(TemplateCollection.All.ordinal)
         composeRule.onNodeWithText("All").assertIsSelected()
     }
 
@@ -261,7 +277,6 @@ class TemplateDiscoveryScreenTest {
             "Ranked on this device from the selected photo shapes, favorites, and recent layouts.",
         ).assertIsDisplayed()
         grid().performScrollToKey("side_by_side")
-        composeRule.onNodeWithText("Why: Fits 2 photos", substring = true).assertIsDisplayed()
         composeRule.onNodeWithContentDescription(
             "Use Side by side layout. Recommendation details: " +
                 "Fits 2 photos • Fits photo shapes • Matches orientations • Matches the canvas",

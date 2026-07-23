@@ -1,5 +1,7 @@
 package com.rameshta.splitframe.ads
 
+import android.content.SharedPreferences
+
 internal class FirstSessionAppOpenGate(
     hasCompletedFirstSession: Boolean,
     private val markFirstSessionCompleted: () -> Unit,
@@ -13,6 +15,19 @@ internal class FirstSessionAppOpenGate(
         markFirstSessionCompleted()
     }
 }
+
+internal fun createFirstSessionAppOpenGate(
+    preferences: SharedPreferences,
+): FirstSessionAppOpenGate =
+    FirstSessionAppOpenGate(
+        hasCompletedFirstSession =
+            preferences.getBoolean(FirstSessionCompletedPreferenceKey, false),
+        markFirstSessionCompleted = {
+            preferences.edit()
+                .putBoolean(FirstSessionCompletedPreferenceKey, true)
+                .apply()
+        },
+    )
 
 internal enum class AppOpenTrigger {
     ColdStart,

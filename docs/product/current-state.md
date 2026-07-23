@@ -107,8 +107,12 @@ Risks are intentionally ranked in the required product-safety order.
 ## Quality baseline
 
 - `debug` and `release` are the only build types; there are no flavors. Release code/resource minification is disabled, and no repository CI workflow was found.
-- The current JVM suite has 126 tests across 18 classes. It adds strict video payload/round-trip and browser-route coverage to the existing photo geometry, publication, recovery, and math suites. It still does not render/encode a real bitmap or Media3 output.
-- Seven Android test files provide 15 tests. All 15 pass on a physical API 36 Samsung, including the five new generated-DAO/recents/v4→v5 migration tests and both recovery tests.
+- The current JVM suite has 247 tests across 34 classes, including first-session app-open gating,
+  photo geometry, publication, recovery, persistence, templates, and video work ownership. It still
+  does not render/encode a real bitmap or Media3 output.
+- Thirteen Android test files provide 39 tests. All 39 pass on a physical API 36 Samsung, including
+  first-session marker persistence, activity recreation, current Room migration coverage, Home,
+  template discovery, editor navigation, resize reachability, and accessibility-state assertions.
 - Debug lint reports 0 errors and 114 warnings: 64 `UnusedResources`, 21 `UseKtx`, 9 `PluralsCandidate`, 8 `GradleDependency`, 6 `TypographyEllipsis`, 3 `NewerVersionAvailable`, 2 `AndroidGradlePluginVersion`, and 1 `IconLocation`.
 - There is no lint baseline, historical v1→v4 migration fixture, controlled process-death test, real revoked/cloud URI or ContentResolver/MediaStore fault-injection test, real JPEG/PNG/WebP integrity/alpha test, real MP4 integrity test, or ad/consent lifecycle test.
 
