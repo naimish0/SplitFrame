@@ -43,6 +43,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.rameshta.splitframe.R
+import com.rameshta.splitframe.ads.ExternalUiReason
+import com.rameshta.splitframe.ads.LocalExternalUiLauncher
 import com.rameshta.splitframe.domain.ExportResolution
 import com.rameshta.splitframe.domain.ExportResult
 import com.rameshta.splitframe.domain.LayoutMath
@@ -64,6 +66,7 @@ fun ExportSheet(
 ) {
     val project = state.project ?: return
     val context = LocalContext.current
+    val externalUiLauncher = LocalExternalUiLauncher.current
     val colors = splitFrameColors()
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollState = rememberScrollState()
@@ -88,7 +91,9 @@ fun ExportSheet(
         if (pendingShare) {
             when (val result = state.exportResult) {
                 is ExportResult.Success -> {
-                    shareImage(context, result.savedUri)
+                    externalUiLauncher.launch(ExternalUiReason.ShareSheet) {
+                        shareImage(context, result.savedUri)
+                    }
                     pendingShare = false
                 }
                 is ExportResult.Failure -> pendingShare = false
@@ -219,7 +224,9 @@ fun ExportSheet(
                         onClick = {
                             val result = state.exportResult as? ExportResult.Success
                             if (result != null) {
-                                shareImage(context, result.savedUri)
+                                externalUiLauncher.launch(ExternalUiReason.ShareSheet) {
+                                    shareImage(context, result.savedUri)
+                                }
                             } else {
                                 onRequestExport {
                                     onExportForShare()

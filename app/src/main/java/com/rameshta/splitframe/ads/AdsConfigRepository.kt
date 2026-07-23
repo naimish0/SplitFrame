@@ -31,6 +31,13 @@ class AdsConfigRepository(
     private val _isAdsEnabled = MutableStateFlow(false)
     val isAdsEnabled: StateFlow<Boolean> = _isAdsEnabled.asStateFlow()
 
+    private val _canPreloadAds = MutableStateFlow(false)
+    internal val canPreloadAds: StateFlow<Boolean> = _canPreloadAds.asStateFlow()
+
+    private val _isConsentFlowInProgress = MutableStateFlow(false)
+    internal val isConsentFlowInProgress: StateFlow<Boolean> =
+        _isConsentFlowInProgress.asStateFlow()
+
     private val _privacyOptionsRequired = MutableStateFlow(false)
     val privacyOptionsRequired: StateFlow<Boolean> = _privacyOptionsRequired.asStateFlow()
 
@@ -44,6 +51,7 @@ class AdsConfigRepository(
         if (!consentFlowInProgress.compareAndSet(false, true)) return
 
         consentInfoUpdateRequested.set(true)
+        _isConsentFlowInProgress.value = true
         _isAdsEnabled.value = false
         val parameters = ConsentRequestParameters.Builder().build()
         consentInformation.requestConsentInfoUpdate(
@@ -61,6 +69,10 @@ class AdsConfigRepository(
                 onComplete(requestConsentError)
             },
         )
+        // UMP synchronously restores the previous session after this request starts. Google
+        // permits preloading from that state while the current-session form remains unresolved;
+        // display stays disabled until finishConsentFlow().
+        updateAdReadiness()
     }
 
     fun showPrivacyOptions(
@@ -73,6 +85,7 @@ class AdsConfigRepository(
         }
 
         if (!consentFlowInProgress.compareAndSet(false, true)) return
+        _isConsentFlowInProgress.value = true
         _isAdsEnabled.value = false
         UserMessagingPlatform.showPrivacyOptionsForm(activity) { formError ->
             finishConsentFlow()
@@ -82,8 +95,9 @@ class AdsConfigRepository(
 
     private fun finishConsentFlow() {
         consentFlowInProgress.set(false)
+        _isConsentFlowInProgress.value = false
         updatePrivacyOptionsRequirement()
-        updateAdsAvailability()
+        updateAdReadiness()
     }
 
     private fun updatePrivacyOptionsRequirement() {
@@ -92,15 +106,19 @@ class AdsConfigRepository(
             ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED
     }
 
-    private fun updateAdsAvailability() {
-        if (consentFlowInProgress.get() || !consentInformation.canRequestAds()) {
+    private fun updateAdReadiness() {
+        if (!consentInformation.canRequestAds()) {
+            _canPreloadAds.value = false
             _isAdsEnabled.value = false
             return
         }
         if (mobileAdsInitialized.get()) {
-            _isAdsEnabled.value = true
+            _canPreloadAds.value = true
+            _isAdsEnabled.value = !consentFlowInProgress.get()
             return
         }
+        _canPreloadAds.value = false
+        _isAdsEnabled.value = false
         initializeMobileAds()
     }
 
@@ -111,10 +129,11 @@ class AdsConfigRepository(
             runCatching {
                 MobileAds.initialize(applicationContext) {
                     mobileAdsInitialized.set(true)
-                    updateAdsAvailability()
+                    updateAdReadiness()
                 }
             }.onFailure {
                 mobileAdsInitializationStarted.set(false)
+                _canPreloadAds.value = false
                 _isAdsEnabled.value = false
             }
         }

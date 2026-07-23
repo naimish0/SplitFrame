@@ -1,5 +1,7 @@
 package com.rameshta.splitframe.presentation.merge
 
+import android.graphics.Bitmap
+import android.graphics.RectF
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -22,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,9 +36,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -51,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.rameshta.splitframe.R
 import com.rameshta.splitframe.domain.CollageGradient
+import com.rameshta.splitframe.domain.CropShape
 import com.rameshta.splitframe.domain.ImageDimensions
 import com.rameshta.splitframe.domain.ImageTransform
 import com.rameshta.splitframe.domain.LayoutMath
@@ -58,6 +65,7 @@ import com.rameshta.splitframe.domain.MergeProject
 import com.rameshta.splitframe.domain.RectPx
 import com.rameshta.splitframe.domain.TemplateKind
 import com.rameshta.splitframe.presentation.coilModel
+import com.rameshta.splitframe.render.CollageCreativeRenderer
 import com.rameshta.splitframe.ui.theme.splitFrameColors
 import kotlin.math.roundToInt
 
@@ -67,9 +75,12 @@ fun MergePreviewCanvas(
     modifier: Modifier = Modifier,
     sourceDimensions: Map<Int, ImageDimensions> = emptyMap(),
     selectedCellIndex: Int? = null,
+    blurredBackground: Bitmap? = null,
     onCellTap: (Int) -> Unit,
     onImageTransformChanged: (Int, ImageTransform, Boolean) -> Unit = { _, _, _ -> },
 ) {
+    val currentProject by rememberUpdatedState(project)
+    val currentSourceDimensions by rememberUpdatedState(sourceDimensions)
     val painters = project.template.cells.associate { cell ->
         val source = project.assignedImages[cell.index]
         val model = source?.coilModel()
@@ -100,34 +111,33 @@ fun MergePreviewCanvas(
         )
     }
 
-    val border = project.borderColor.toComposeColor()
     val splitFrameColors = splitFrameColors()
-    val dividerColor = MaterialTheme.colorScheme.surface
+    val dividerColor = Color.White
     val emptyFill = MaterialTheme.colorScheme.surfaceContainerHighest
     val emptyText = MaterialTheme.colorScheme.onSurfaceVariant
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
-    val density = LocalDensity.current
 
     Box(modifier = modifier) {
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { canvasSize = it }
-                .pointerInput(project, selectedCellIndex) {
+                .pointerInput(project.id, project.template.id, selectedCellIndex) {
                     detectTransformGestures { centroid, pan, zoomChange, _ ->
                         val cellIndex = selectedCellIndex ?: return@detectTransformGestures
-                        if (!project.assignedImages.containsKey(cellIndex)) return@detectTransformGestures
+                        val gestureProject = currentProject
+                        if (!gestureProject.assignedImages.containsKey(cellIndex)) return@detectTransformGestures
                         val frame = selectedFrameForGesture(
-                            project = project,
+                            project = gestureProject,
                             cellIndex = cellIndex,
                             widthPx = size.width.toFloat(),
                             heightPx = size.height.toFloat(),
-                            spacingPx = project.spacingDp.dp.toPx(),
+                            spacingPx = gestureProject.renderMetrics(size.width.toFloat()).spacingPx,
                         ) ?: return@detectTransformGestures
                         if (!frame.contains(centroid.x, centroid.y)) return@detectTransformGestures
-                        val current = project.imageTransforms[cellIndex] ?: ImageTransform.Default
+                        val current = gestureProject.imageTransforms[cellIndex] ?: ImageTransform.Default
                         val next = LayoutMath.transformAfterGesture(
-                            sourceDimensions = sourceDimensions[cellIndex],
+                            sourceDimensions = currentSourceDimensions[cellIndex],
                             destinationWidthPx = frame.width,
                             destinationHeightPx = frame.height,
                             current = current,
@@ -140,21 +150,22 @@ fun MergePreviewCanvas(
                         }
                     }
                 }
-                .pointerInput(project, selectedCellIndex) {
+                .pointerInput(project.id, project.template.id, selectedCellIndex) {
                     detectTapGestures(
                         onDoubleTap = { offset ->
                             val cellIndex = selectedCellIndex ?: return@detectTapGestures
+                            val gestureProject = currentProject
                             val frame = selectedFrameForGesture(
-                                project = project,
+                                project = gestureProject,
                                 cellIndex = cellIndex,
                                 widthPx = size.width.toFloat(),
                                 heightPx = size.height.toFloat(),
-                                spacingPx = project.spacingDp.dp.toPx(),
+                                spacingPx = gestureProject.renderMetrics(size.width.toFloat()).spacingPx,
                             ) ?: return@detectTapGestures
-                            if (frame.contains(offset.x, offset.y) && project.assignedImages.containsKey(cellIndex)) {
-                                val current = project.imageTransforms[cellIndex] ?: ImageTransform.Default
+                            if (frame.contains(offset.x, offset.y) && gestureProject.assignedImages.containsKey(cellIndex)) {
+                                val current = gestureProject.imageTransforms[cellIndex] ?: ImageTransform.Default
                                 val next = LayoutMath.transformAfterDoubleTap(
-                                    sourceDimensions = sourceDimensions[cellIndex],
+                                    sourceDimensions = currentSourceDimensions[cellIndex],
                                     destinationWidthPx = frame.width,
                                     destinationHeightPx = frame.height,
                                     current = current,
@@ -165,16 +176,20 @@ fun MergePreviewCanvas(
                             }
                         },
                         onTap = { offset ->
-                            if (project.template.kind == TemplateKind.BeforeAfter) {
-                                val dividerX = size.width * project.beforeAfterSlider.coerceIn(0.05f, 0.95f)
+                            val gestureProject = currentProject
+                            if (gestureProject.template.kind == TemplateKind.BeforeAfter) {
+                                val dividerX = LayoutMath.beforeAfterDividerX(
+                                    canvasWidthPx = size.width.toFloat(),
+                                    position = gestureProject.beforeAfterSlider,
+                                )
                                 onCellTap(if (offset.x <= dividerX) 0 else 1)
                             } else {
-                                val hitCell = project.template.cells.firstOrNull { cell ->
+                                val hitCell = gestureProject.template.cells.firstOrNull { cell ->
                                     val frame = LayoutMath.cellFrame(
                                         cell,
                                         size.width.toFloat(),
                                         size.height.toFloat(),
-                                        project.spacingDp.dp.toPx(),
+                                        gestureProject.renderMetrics(size.width.toFloat()).spacingPx,
                                     )
                                     frame.contains(offset.x, offset.y)
                                 }
@@ -184,18 +199,35 @@ fun MergePreviewCanvas(
                     )
                 },
         ) {
-            drawRect(project.backgroundGradient.toBrush(size))
-            val cornerRadiusPx = project.cornerRadiusDp.dp.toPx()
-            val spacingPx = project.spacingDp.dp.toPx()
-            val borderWidthPx = project.borderWidthDp.dp.toPx()
+            drawIntoCanvas { canvas ->
+                CollageCreativeRenderer.drawBackground(
+                    canvas = canvas.nativeCanvas,
+                    widthPx = size.width,
+                    heightPx = size.height,
+                    style = project.backgroundStyle,
+                    legacyGradient = project.backgroundGradient,
+                    blurredBitmap = blurredBackground,
+                )
+            }
+            val renderMetrics = project.renderMetrics(size.width)
+            val cornerRadiusPx = renderMetrics.cornerRadiusPx
+            val spacingPx = renderMetrics.spacingPx
+            val borderWidthPx = renderMetrics.borderWidthPx
             val selectedStrokeWidth = 3.dp.toPx()
 
             if (project.template.kind == TemplateKind.BeforeAfter) {
                 val frame = RectPx(0f, 0f, size.width, size.height)
-                val path = roundedPath(frame, cornerRadiusPx)
+                val androidPath = CollageCreativeRenderer.cropPath(
+                    shape = CropShape.Rectangle,
+                    bounds = frame.toAndroidRect(),
+                    cornerRadiusPx = cornerRadiusPx,
+                )
+                val path = androidPath.asComposePath()
+                val dividerX = LayoutMath.beforeAfterDividerX(size.width, project.beforeAfterSlider)
                 clipPath(path) {
-                    drawRect(emptyFill)
-                    val dividerX = size.width * project.beforeAfterSlider.coerceIn(0.05f, 0.95f)
+                    if (project.assignedImages[0] == null || project.assignedImages[1] == null) {
+                        drawRect(emptyFill)
+                    }
                     clipRect(right = dividerX) {
                         drawPainterInFrame(
                             painter = painters[0],
@@ -216,14 +248,14 @@ fun MergePreviewCanvas(
                         color = dividerColor,
                         start = Offset(dividerX, 0f),
                         end = Offset(dividerX, size.height),
-                        strokeWidth = 4.dp.toPx(),
+                        strokeWidth = renderMetrics.dividerWidthPx,
                     )
                 }
                 selectedCellIndex?.let { index ->
                     val selectedFrame = if (index == 0) {
-                        RectPx(0f, 0f, size.width * project.beforeAfterSlider, size.height)
+                        RectPx(0f, 0f, dividerX, size.height)
                     } else {
-                        RectPx(size.width * project.beforeAfterSlider, 0f, size.width, size.height)
+                        RectPx(dividerX, 0f, size.width, size.height)
                     }
                     drawRoundRect(
                         color = splitFrameColors.selectedCell,
@@ -233,23 +265,34 @@ fun MergePreviewCanvas(
                         style = androidx.compose.ui.graphics.drawscope.Stroke(selectedStrokeWidth),
                     )
                 }
-                drawRoundRect(
-                    color = border,
-                    topLeft = Offset(frame.left, frame.top),
-                    size = Size(frame.width, frame.height),
-                    cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(borderWidthPx),
-                )
+                drawIntoCanvas { canvas ->
+                    CollageCreativeRenderer.drawBorder(
+                        canvas = canvas.nativeCanvas,
+                        path = androidPath,
+                        bounds = frame.toAndroidRect(),
+                        widthPx = borderWidthPx,
+                        style = project.borderStyle,
+                        legacyColor = project.borderColor,
+                        canvasWidthPx = size.width,
+                    )
+                }
             } else {
                 project.template.cells.forEach { cell ->
                     val frame = LayoutMath.cellFrame(cell, size.width, size.height, spacingPx)
-                    val path = roundedPath(frame, cornerRadiusPx)
+                    val androidPath = CollageCreativeRenderer.cropPath(
+                        shape = project.cropShapes[cell.index] ?: CropShape.Rectangle,
+                        bounds = frame.toAndroidRect(),
+                        cornerRadiusPx = cornerRadiusPx,
+                    )
+                    val path = androidPath.asComposePath()
                     clipPath(path) {
-                        drawRect(
-                            color = emptyFill,
-                            topLeft = Offset(frame.left, frame.top),
-                            size = Size(frame.width, frame.height),
-                        )
+                        if (project.assignedImages[cell.index] == null) {
+                            drawRect(
+                                color = emptyFill,
+                                topLeft = Offset(frame.left, frame.top),
+                                size = Size(frame.width, frame.height),
+                            )
+                        }
                         drawPainterInFrame(
                             painter = painters[cell.index],
                             frame = frame,
@@ -258,24 +301,34 @@ fun MergePreviewCanvas(
                         )
                     }
                     if (borderWidthPx > 0f) {
-                        drawRoundRect(
-                            color = border,
-                            topLeft = Offset(frame.left, frame.top),
-                            size = Size(frame.width, frame.height),
-                            cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(borderWidthPx),
-                        )
+                        drawIntoCanvas { canvas ->
+                            CollageCreativeRenderer.drawBorder(
+                                canvas = canvas.nativeCanvas,
+                                path = androidPath,
+                                bounds = frame.toAndroidRect(),
+                                widthPx = borderWidthPx,
+                                style = project.borderStyle,
+                                legacyColor = project.borderColor,
+                                canvasWidthPx = size.width,
+                            )
+                        }
                     }
                     if (selectedCellIndex == cell.index) {
-                        drawRoundRect(
+                        drawPath(
+                            path = path,
                             color = splitFrameColors.selectedCell,
-                            topLeft = Offset(frame.left, frame.top),
-                            size = Size(frame.width, frame.height),
-                            cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
                             style = androidx.compose.ui.graphics.drawscope.Stroke(selectedStrokeWidth),
                         )
                     }
                 }
+            }
+            drawIntoCanvas { canvas ->
+                CollageCreativeRenderer.drawTextLayers(
+                    canvas = canvas.nativeCanvas,
+                    layers = project.textLayers,
+                    canvasWidthPx = size.width,
+                    canvasHeightPx = size.height,
+                )
             }
         }
 
@@ -283,14 +336,12 @@ fun MergePreviewCanvas(
             project.template.cells
                 .filter { project.assignedImages[it.index] == null }
                 .forEach { cell ->
-                    val frame = with(density) {
-                        LayoutMath.cellFrame(
-                            cell,
-                            canvasSize.width.toFloat(),
-                            canvasSize.height.toFloat(),
-                            project.spacingDp.dp.toPx(),
-                        )
-                    }
+                    val frame = LayoutMath.cellFrame(
+                        cell,
+                        canvasSize.width.toFloat(),
+                        canvasSize.height.toFloat(),
+                        project.renderMetrics(canvasSize.width.toFloat()).spacingPx,
+                    )
                     EmptyCellLabel(
                         frame = frame,
                         canvasSize = canvasSize,
@@ -301,6 +352,16 @@ fun MergePreviewCanvas(
         }
     }
 }
+
+private fun RectPx.toAndroidRect(): RectF = RectF(left, top, right, bottom)
+
+private fun MergeProject.renderMetrics(canvasWidthPx: Float) =
+    LayoutMath.collageRenderMetrics(
+        canvasWidthPx = canvasWidthPx,
+        spacingDp = spacingDp,
+        cornerRadiusDp = cornerRadiusDp,
+        borderWidthDp = borderWidthDp,
+    )
 
 private fun selectedFrameForGesture(
     project: MergeProject,

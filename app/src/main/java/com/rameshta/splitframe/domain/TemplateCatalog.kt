@@ -1,6 +1,11 @@
 package com.rameshta.splitframe.domain
 
 object TemplateCatalog {
+    fun canApplyWithoutDroppingImages(
+        template: LayoutTemplate,
+        imageCount: Int,
+    ): Boolean = imageCount.coerceAtLeast(0) <= template.slotCount
+
     fun compatibleTemplates(
         templates: List<LayoutTemplate>,
         imageCount: Int,

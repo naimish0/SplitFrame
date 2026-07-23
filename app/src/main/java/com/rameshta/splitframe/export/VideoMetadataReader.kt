@@ -18,7 +18,13 @@ class VideoMetadataReader(
     fun read(uriString: String): VideoMetadataResult {
         val uri = Uri.parse(uriString)
         if (!canOpen(uri)) return VideoMetadataResult.Unsupported(VideoSupportStatus.Unreadable)
-        val resolverMimeType = contentResolver.getType(uri)?.lowercase()
+        val resolverMimeType = try {
+            contentResolver.getType(uri)?.lowercase()
+        } catch (_: SecurityException) {
+            return VideoMetadataResult.Unsupported(VideoSupportStatus.Unreadable)
+        } catch (_: IllegalArgumentException) {
+            return VideoMetadataResult.Unsupported(VideoSupportStatus.UnsupportedMimeType)
+        }
         if (resolverMimeType != null && resolverMimeType !in SupportedMimeTypes) {
             return VideoMetadataResult.Unsupported(VideoSupportStatus.UnsupportedMimeType)
         }

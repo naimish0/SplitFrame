@@ -12,6 +12,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.rameshta.splitframe.domain.ImageSource
 import com.rameshta.splitframe.domain.LayoutTemplate
 import com.rameshta.splitframe.domain.MergeProject
 import com.rameshta.splitframe.domain.TemplateIds
@@ -69,6 +70,28 @@ class EditorNavigationTest {
 
         composeRule.onNodeWithText("Template List").assertIsDisplayed()
     }
+
+    @Test
+    fun largerLayoutShowsEverySelectedPhotoAndLeavesOnlyExtraCellsEmpty() {
+        val templates = TemplateRepository().templates()
+        val template = templates.first { it.id == TemplateIds.GRID_2X2 }
+        composeRule.setContent {
+            SplitFrameTheme {
+                EditorScreen(
+                    state = MergeState(
+                        availableTemplates = templates,
+                        project = editorTestProject(template, assignedCount = 3),
+                    ),
+                    onIntent = {},
+                    onBack = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Photo 1 of 3").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Photo 2 of 3").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Photo 3 of 3").assertIsDisplayed()
+    }
 }
 
 private fun editorTestState(): MergeState {
@@ -80,11 +103,16 @@ private fun editorTestState(): MergeState {
     )
 }
 
-private fun editorTestProject(template: LayoutTemplate): MergeProject =
+private fun editorTestProject(
+    template: LayoutTemplate,
+    assignedCount: Int = 0,
+): MergeProject =
     MergeProject(
         id = "editor-test-project",
         template = template,
-        assignedImages = emptyMap(),
+        assignedImages = template.cells.take(assignedCount).associate { cell ->
+            cell.index to ImageSource.LocalUri("content://photos/${cell.index}")
+        },
         spacingDp = template.defaultSpacingDp,
         cornerRadiusDp = template.defaultCornerRadiusDp,
         backgroundColor = 0xFFFFFFFFuL,

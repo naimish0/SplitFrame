@@ -27,6 +27,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.rameshta.splitframe.R
+import com.rameshta.splitframe.ads.ExternalUiReason
+import com.rameshta.splitframe.ads.LocalExternalUiLauncher
 import com.rameshta.splitframe.ui.components.SplitFrameTopAppBar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,6 +39,7 @@ fun PrivacyScreen(
     onManageAdPrivacy: () -> Unit,
 ) {
     val context = LocalContext.current
+    val externalUiLauncher = LocalExternalUiLauncher.current
     Scaffold(
         topBar = {
             SplitFrameTopAppBar(
@@ -82,7 +85,11 @@ fun PrivacyScreen(
                 }
             }
             OutlinedButton(
-                onClick = { context.openWebPage(GOOGLE_PRIVACY_URL) },
+                onClick = {
+                    externalUiLauncher.launch(ExternalUiReason.ExternalViewer) {
+                        context.openWebPage(GOOGLE_PRIVACY_URL)
+                    }
+                },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(stringResource(R.string.google_privacy_policy))
@@ -112,9 +119,7 @@ private fun PrivacySection(titleRes: Int, bodyRes: Int) {
 }
 
 private fun Context.openWebPage(url: String) {
-    runCatching {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-    }
+    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
 }
 
 private const val GOOGLE_PRIVACY_URL = "https://policies.google.com/privacy"

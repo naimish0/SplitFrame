@@ -17,10 +17,14 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.viewinterop.AndroidView
 import com.rameshta.splitframe.BuildConfig
 import com.rameshta.splitframe.R
@@ -44,38 +48,41 @@ fun NativeAdvancedAd(
     onPrimaryColor: Color,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val externalUiLauncher = LocalExternalUiLauncher.current
+    val currentExternalUiLauncher = rememberUpdatedState(externalUiLauncher)
     var nativeAd by remember { mutableStateOf<NativeAd?>(null) }
+    val adOwner = remember(context) { ReplaceableAdOwner<NativeAd>(NativeAd::destroy) }
 
-    DisposableEffect(context) {
-        var currentAd: NativeAd? = null
-        var isDisposed = false
+    DisposableEffect(context, adOwner) {
+        val loadGeneration = adOwner.beginLoad()
         val adLoader = AdLoader.Builder(context, BuildConfig.NATIVE_AD_UNIT_ID)
             .forNativeAd { ad ->
-                if (isDisposed) {
-                    ad.destroy()
-                } else {
-                    currentAd?.destroy()
-                    currentAd = ad
+                if (adOwner.accept(loadGeneration, ad)) {
                     nativeAd = ad
                 }
             }
             .withAdListener(
                 object : AdListener() {
                     override fun onAdFailedToLoad(error: LoadAdError) {
-                        if (!isDisposed) nativeAd = null
+                        adOwner.failed(loadGeneration)
+                        nativeAd = null
+                    }
+
+                    override fun onAdClicked() {
+                        currentExternalUiLauncher.value.launch(ExternalUiReason.AdClick) {}
                     }
                 },
             )
             .build()
         adLoader.loadAd(AdRequest.Builder().build())
         onDispose {
-            isDisposed = true
-            currentAd?.destroy()
+            adOwner.dispose()
             nativeAd = null
         }
     }
 
     val ad = nativeAd ?: return
+    val sponsoredDescription = stringResource(R.string.sponsored)
     val colors = NativeAdViewColors(
         container = containerColor.toArgb(),
         content = contentColor.toArgb(),
@@ -85,9 +92,12 @@ fun NativeAdvancedAd(
         onPrimary = onPrimaryColor.toArgb(),
     )
     AndroidView(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = sponsoredDescription },
         factory = { createSplitFrameNativeAdView(it) },
         update = { view -> view.bind(ad, colors) },
+        onRelease = NativeAdView::destroy,
     )
 }
 
