@@ -96,6 +96,7 @@ fun TemplatePickerScreen(
     onIntent: (MergeIntent) -> Unit,
     onOpenSingleImageTool: () -> Unit,
     onTemplateSelected: (String) -> Unit,
+    onTrySampleCollage: () -> Unit = {},
     showNativeAds: Boolean = false,
 ) {
     val discovery = state.templateDiscovery
@@ -229,6 +230,17 @@ fun TemplatePickerScreen(
                     loadFailed = discovery.loadFailed,
                     onIntent = onIntent,
                 )
+            }
+            item(
+                key = "try-sample-collage",
+                span = { GridItemSpan(maxLineSpan) },
+            ) {
+                TextButton(
+                    onClick = onTrySampleCollage,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.try_sample_collage))
+                }
             }
             if (visibleTemplates.isEmpty()) {
                 item(
@@ -548,6 +560,7 @@ private fun TemplateCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .testTag("template-card:${template.id}")
             .semantics {
                 this.selected = selected
                 role = Role.Button

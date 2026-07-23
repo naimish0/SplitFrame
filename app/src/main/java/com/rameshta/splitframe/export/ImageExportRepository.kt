@@ -12,8 +12,10 @@ import android.graphics.RectF
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import com.rameshta.splitframe.domain.CollageGradient
 import com.rameshta.splitframe.domain.CollageBackgroundKind
+import com.rameshta.splitframe.domain.CollageRenderColors
 import com.rameshta.splitframe.domain.CropShape
 import com.rameshta.splitframe.domain.ExportResult
 import com.rameshta.splitframe.domain.ImageDimensions
@@ -29,14 +31,16 @@ import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import kotlin.math.ceil
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
-class ImageExportRepository(
+class ImageExportRepository internal constructor(
     private val context: Context,
     private val imageSourceReader: ImageSourceReader,
+    private val publicationJournal: ExportPublicationJournal,
 ) {
     suspend fun export(project: MergeProject): ExportResult {
         var rendered: Bitmap? = null
@@ -48,8 +52,11 @@ class ImageExportRepository(
             val outputSize = LayoutMath.outputSizeForResolution(project.template, project.exportResolution, dimensions)
             val output = render(project, outputSize.widthPx, outputSize.heightPx)
             rendered = output
-            val savedUri = saveBitmap(output)
-            ExportResult.Success(savedUri.toString())
+            val savedOutput = saveBitmap(output)
+            ExportResult.Success(
+                savedUri = savedOutput.uri.toString(),
+                sizeBytes = savedOutput.sizeBytes,
+            )
         } catch (oom: OutOfMemoryError) {
             ExportResult.Failure("Not enough memory for this export size.")
         } catch (cancellation: CancellationException) {
@@ -200,7 +207,7 @@ class ImageExportRepository(
         canvas.restore()
 
         val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
+            color = CollageRenderColors.BeforeAfterDividerArgb.toLong().toInt()
             strokeWidth = dividerWidthPx
         }
         canvas.drawLine(dividerX, 0f, dividerX, heightPx.toFloat(), dividerPaint)
@@ -293,33 +300,48 @@ class ImageExportRepository(
         canvas.drawBitmap(bitmap, srcRect, dstRect, null)
     }
 
-    private suspend fun saveBitmap(bitmap: Bitmap): Uri {
+    private suspend fun saveBitmap(bitmap: Bitmap): SavedPhotoOutput {
         val processingContext = currentCoroutineContext()
         val resolver = context.contentResolver
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val displayName = "SplitFrame_${timestamp}_${UUID.randomUUID().toString().take(8)}.png"
+        val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val journalId = publicationJournal.prepare(collection.toString(), displayName)
         val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, "SplitFrame_$timestamp.jpg")
-            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/SplitFrame")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
         }
-        val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-        return transactionalPhotoExport(
+        val uri = transactionalPhotoExport(
             insert = {
                 processingContext.ensureActive()
                 resolver.insert(collection, values)
             },
+            afterInsert = { uri -> publicationJournal.recordWriting(journalId, uri.toString()) },
             write = { uri ->
                 processingContext.ensureActive()
                 resolver.openOutputStream(uri)?.use { output ->
-                    writeCompressedJpeg(output) { stream ->
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 94, stream)
+                    writeLosslessPng(output) { stream ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
                     }
                 } ?: error("Could not open export stream.")
                 processingContext.ensureActive()
             },
+            validate = { uri ->
+                processingContext.ensureActive()
+                validateEncodedImageOutput(
+                    resolver = resolver,
+                    uri = uri,
+                    expectedWidthPx = bitmap.width,
+                    expectedHeightPx = bitmap.height,
+                    expectedMimeType = "image/png",
+                )
+                processingContext.ensureActive()
+            },
+            onReadyToPublish = { publicationJournal.markReadyToPublish(journalId) },
             publish = { uri ->
                 processingContext.ensureActive()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -327,12 +349,22 @@ class ImageExportRepository(
                         put(MediaStore.Images.Media.IS_PENDING, 0)
                     }
                     check(resolver.update(uri, publishValues, null, null) == 1) {
-                        "Could not publish JPEG export."
+                        "Could not publish photo export."
                     }
                 }
                 processingContext.ensureActive()
             },
-            rollback = { uri -> resolver.delete(uri, null, null) > 0 },
+            afterPublish = { publicationJournal.markPublished(journalId) },
+            commit = { publicationJournal.remove(journalId) },
+            rollback = { uri ->
+                (resolver.delete(uri, null, null) > 0).also { deleted ->
+                    if (deleted) publicationJournal.remove(journalId)
+                }
+            },
+        )
+        return SavedPhotoOutput(
+            uri = uri,
+            sizeBytes = resolver.mediaSizeBytes(uri),
         )
     }
 
@@ -347,28 +379,60 @@ class ImageExportRepository(
     }
 }
 
-internal fun writeCompressedJpeg(
+private data class SavedPhotoOutput(
+    val uri: Uri,
+    val sizeBytes: Long?,
+)
+
+private fun android.content.ContentResolver.mediaSizeBytes(uri: Uri): Long? =
+    runCatching {
+        query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            val column = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (column < 0 || cursor.isNull(column)) {
+                null
+            } else {
+                cursor.getLong(column).takeIf { it > 0L }
+            }
+        }
+    }.getOrNull() ?: runCatching {
+        openAssetFileDescriptor(uri, "r")?.use { descriptor ->
+            descriptor.length.takeIf { it > 0L }
+        }
+    }.getOrNull()
+
+internal fun writeLosslessPng(
     output: OutputStream,
     compress: (OutputStream) -> Boolean,
 ) {
-    check(compress(output)) { "Could not encode JPEG export." }
+    check(compress(output)) { "Could not encode lossless PNG export." }
     output.flush()
 }
 
 internal fun <Entry : Any> transactionalPhotoExport(
     insert: () -> Entry?,
+    afterInsert: (Entry) -> Unit = {},
     write: (Entry) -> Unit,
+    validate: (Entry) -> Unit = {},
+    onReadyToPublish: (Entry) -> Unit = {},
     publish: (Entry) -> Unit,
+    afterPublish: (Entry) -> Unit = {},
+    commit: (Entry) -> Unit = {},
     rollback: (Entry) -> Boolean,
 ): Entry {
     val entry = insert() ?: error("Could not create MediaStore entry.")
     return try {
+        afterInsert(entry)
         write(entry)
+        validate(entry)
+        onReadyToPublish(entry)
         publish(entry)
+        afterPublish(entry)
+        commit(entry)
         entry
     } catch (failure: Throwable) {
         val rollbackFailure = runCatching {
-            check(rollback(entry)) { "Could not remove incomplete JPEG export." }
+            check(rollback(entry)) { "Could not remove incomplete photo export." }
         }.exceptionOrNull()
         if (rollbackFailure != null && rollbackFailure !== failure) {
             failure.addSuppressed(rollbackFailure)

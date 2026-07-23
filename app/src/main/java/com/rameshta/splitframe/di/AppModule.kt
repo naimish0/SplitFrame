@@ -2,6 +2,7 @@ package com.rameshta.splitframe.di
 
 import androidx.room.Room
 import androidx.work.WorkManager
+import com.rameshta.splitframe.R
 import com.rameshta.splitframe.ads.AdsConfigRepository
 import com.rameshta.splitframe.ads.SharedPreferencesWorkflowInterstitialStateStore
 import com.rameshta.splitframe.ads.SplitFrameAdManager
@@ -17,9 +18,12 @@ import com.rameshta.splitframe.data.VideoProjectStore
 import com.rameshta.splitframe.data.local.SplitFrameDatabase
 import com.rameshta.splitframe.domain.TemplateRepository
 import com.rameshta.splitframe.export.ImageExportRepository
+import com.rameshta.splitframe.export.ContentResolverOwnedPublicationAccess
+import com.rameshta.splitframe.export.ExportPublicationReconciler
 import com.rameshta.splitframe.export.ImageSourceReader
 import com.rameshta.splitframe.export.MixedMediaMetadataReader
 import com.rameshta.splitframe.export.SingleImageProcessingRepository
+import com.rameshta.splitframe.export.SharedPreferencesExportPublicationJournal
 import com.rameshta.splitframe.export.VideoExportRepository
 import com.rameshta.splitframe.export.VideoExportRecoveryCoordinator
 import com.rameshta.splitframe.export.VideoMetadataReader
@@ -55,16 +59,38 @@ val appModule = module {
     single { get<SplitFrameDatabase>().recentProjectDao() }
     single { ProjectStore(get(), get(), get(), get()) }
     single<DeviceWallpaperDimensionsProvider> { AndroidDeviceWallpaperDimensionsProvider(androidApplication()) }
-    single { VideoProjectStore(get(), get(), get()) }
+    single {
+        VideoProjectStore(
+            projectDao = get(),
+            exportWorkDao = get(),
+            recentProjectDao = get(),
+            defaultProjectName = { androidApplication().getString(R.string.video_project_default_name) },
+        )
+    }
     single { ContentResolverMediaUriAccess(androidApplication().contentResolver) }
     single { RecentVideoProjectStore(get(), get(), get<ContentResolverMediaUriAccess>()) }
     single { TemplateRepository() }
     single { ImageSourceReader(androidApplication().contentResolver) }
-    single { ImageExportRepository(androidApplication(), get()) }
-    single { SingleImageProcessingRepository(androidApplication(), get()) }
+    single { SharedPreferencesExportPublicationJournal(androidApplication()) }
+    single { ContentResolverOwnedPublicationAccess(androidApplication().contentResolver) }
+    single {
+        ExportPublicationReconciler(
+            journal = get<SharedPreferencesExportPublicationJournal>(),
+            publicationAccess = get<ContentResolverOwnedPublicationAccess>(),
+            videoExportDirectory = java.io.File(androidApplication().cacheDir, "video_exports"),
+        )
+    }
+    single { ImageExportRepository(androidApplication(), get(), get<SharedPreferencesExportPublicationJournal>()) }
+    single {
+        SingleImageProcessingRepository(
+            androidApplication(),
+            get(),
+            get<SharedPreferencesExportPublicationJournal>(),
+        )
+    }
     single { VideoMetadataReader(androidApplication().contentResolver) }
     single { MixedMediaMetadataReader(androidApplication().contentResolver, get(), get()) }
-    single { VideoExportRepository(androidApplication()) }
+    single { VideoExportRepository(androidApplication(), get<SharedPreferencesExportPublicationJournal>()) }
     single { WorkManager.getInstance(androidApplication()) }
     single { VideoExportRecoveryCoordinator(get(), get()) }
     single { AdsConfigRepository(androidApplication()) }
@@ -74,7 +100,7 @@ val appModule = module {
     single { WorkflowInterstitialTracker(get()) }
     single { WorkflowInterstitialCoordinator(get()) }
     single { SplitFrameAdManager(androidApplication(), get(), get()) }
-    viewModel { HomeDashboardViewModel(get(), get(), get()) }
+    viewModel { HomeDashboardViewModel(get(), get(), get(), get()) }
     viewModel { MergeViewModel(get(), get(), get(), get(), get()) }
     viewModel { SingleImageViewModel(get(), get(), get(), get()) }
     viewModel { (sessionArgs: VideoProjectSessionArgs) ->

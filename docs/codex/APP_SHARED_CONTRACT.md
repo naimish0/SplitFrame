@@ -75,10 +75,10 @@ Values in this table govern capability-driven sections elsewhere in the contract
 | Navigation framework | Manual saveable `AppRoute`/`AppScreen` navigation in Compose |
 | Minimum supported form factors | Android phones and tablets, including compact, 7-inch, and 10-inch layouts |
 | Supported orientations | Portrait and landscape |
-| Localization mode | `SINGLE_LANGUAGE` |
-| Supported locales | English `en` only; approved single-language exception documented in `docs/product/current-state.md` |
+| Localization mode | `MULTILINGUAL` |
+| Supported locales | English `en`, German `de`, French `fr`, Japanese `ja`, Hindi `hi`, Russian `ru`, Spanish `es`, Portuguese (Portugal) `pt-PT`, Portuguese (Brazil) `pt-BR`, Italian `it`, Indonesian `id`, Arabic `ar`, Korean `ko`, and Urdu `ur` |
 | Default locale | English `en` |
-| RTL support | `DISABLED` until a shipped RTL locale is added; platform `supportsRtl` remains enabled for future readiness |
+| RTL support | `ENABLED` for Arabic `ar` and Urdu `ur`; platform `supportsRtl` is enabled |
 | Theme support | System-controlled Light and Dark themes |
 | Dynamic Color support | `DISABLED` |
 | Accessibility requirements | Material 3 semantics; 48 dp targets; TalkBack labels and logical traversal; keyboard/focus support where applicable; 200% font-scale resilience; accessible contrast; reduced-motion-safe behavior |
@@ -127,7 +127,7 @@ Never use `git config --global`.
 - [x] Identity, package, product, users, use cases, and processing model completed.
 - [x] SDK, UI, architecture, dependency injection, persistence, background work, and navigation completed.
 - [x] Form-factor, orientation, theme, accessibility, and localization values completed.
-- [x] English-only exception documented in product context; unshipped translations must not be advertised.
+- [x] All 14 baseline locales are configured for app-wide resources and the Settings selector.
 - [x] Advertising, billing, analytics, crash reporting, cloud, and store-asset capabilities completed.
 - [x] Git workflow and repository-local identity completed without global configuration.
 - [x] Every ad placement, trigger, cooldown, no-ad rule, first-session rule, consent provider, and debug mode completed.
@@ -326,25 +326,25 @@ functionality.
 
 Copy one row per supported locale, retaining all 14 baseline rows for multilingual applications:
 
-| Locale | Android strings | Plurals/formatting | In-app switch | RTL/layout | Accessibility | Phone assets | 7-inch assets | 10-inch assets | Feature graphic | Linguistic review | Status |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `en` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
-| `de` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
-| `fr` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
-| `ja` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
-| `hi` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
-| `ru` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
-| `es` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
-| `pt-PT` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
-| `pt-BR` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
-| `it` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
-| `id` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
-| `ar` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
-| `ko` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
-| `ur` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | DRAFT |
+| Locale | Android strings | Plurals/formatting | In-app switch | RTL/layout | Accessibility | Phone assets | 7-inch assets | 10-inch assets | Feature graphic | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `en` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
+| `de` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
+| `fr` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
+| `ja` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
+| `hi` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
+| `ru` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
+| `es` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
+| `pt-PT` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
+| `pt-BR` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
+| `it` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
+| `id` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
+| `ar` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
+| `ko` | ☐ | ☐ | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
+| `ur` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | IN PROGRESS |
 
-Use `DRAFT–NOT FOR UPLOAD`, `REVIEWED`, or `COMPLETE` as explicit status values. Do not mark a row
-complete while any applicable cell is unchecked.
+Use `IN PROGRESS`, `VERIFIED`, or `COMPLETE` as explicit status values. Do not mark a row complete
+while any applicable cell is unchecked.
 
 ## 9. Settings Screen Contract
 

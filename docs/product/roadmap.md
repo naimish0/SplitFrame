@@ -2,7 +2,7 @@
 
 This roadmap is risk-led. Cycle 0 was analysis-only; the sequential-video migration and active-video recovery slices were subsequently approved and implemented.
 
-Status update, 2026-07-21: exact video recovery, video-only recent projects, bounded photo/resize/video publication integrity, and the highest-risk photo effect-geometry parity slice are complete in source. Controlled system process death, real revoked/cloud URI and MediaStore failure injection, and real pixel/output decoding/playback remain manual release checks.
+Status update, 2026-07-23: exact video recovery, video-only recent projects, bounded photo/resize/video publication integrity, durable export recovery, and the highest-risk photo effect-geometry parity slice are complete in source. Controlled system process death, real revoked/cloud URI and MediaStore failure injection, and real pixel/output decoding/playback remain manual release checks.
 
 ## Prioritization basis
 
@@ -91,7 +91,10 @@ Single-image JPEG, PNG, and WebP publication now uses its own in-process transac
 
 Decoded input and rendered output are cleaned identity-safely across cancellation, OOM, render, save, and cleanup failures. Existing dimensions, white JPEG background, alpha-capable PNG/WebP rendering, API-specific WebP mapping, quality, MIME/extension, naming, permissions, path, and offline behavior remain unchanged. Thirteen focused JVM tests cover the transaction, encoders, mappings, and aliased/distinct cleanup; all nine connected regressions pass on API 36, but they do not encode real files.
 
-Process death, real provider/low-storage faults, actual output decode/alpha verification, cancellation timing inside non-interruptible compression, and the upstream EXIF rotation-allocation leak remain explicit residuals.
+Process death, real provider/low-storage faults, alpha/pixel-parity verification, and cancellation
+timing inside non-interruptible compression remain explicit residuals. Bounded real JPEG/PNG/WebP
+reopen/decode validation and the upstream EXIF rotation-allocation ownership leak were addressed in
+later Phase 0 slices.
 
 ## Completed video-publication integrity target
 
@@ -117,26 +120,74 @@ The browser supports new/resume, rename, duplicate, timestamps, fixed-size API 2
 
 Four additional JVM assertions, five generated-DAO/migration device tests, and one additional browser/editor Activity-recreation test cover the bounded slice; all 15 connected tests pass on physical API 36. Photo/resize persistence, Navigation/SavedStateHandle adoption, a normalized media-item table, true process-death/provider revocation, and video composition/export changes remain non-goals or manual boundaries.
 
+## Completed EXIF orientation ownership target
+
+`ImageSourceReader` now releases its decoded, decoder-owned bitmap if EXIF transformation
+allocation throws. Ownership is retained when the transformation returns the same bitmap and
+transferred normally when it returns a distinct bitmap. Focused tests prove exact-once release,
+identity retention, distinct-result transfer, original-failure preservation, and cleanup of a
+distinct transformed result if releasing the original fails.
+
+MIME validation, EXIF mappings, sampled decode planning, oriented dimensions, repository ownership,
+and offline behavior remain unchanged.
+
+## Completed durable export-recovery target
+
+### Reconcile pending MediaStore publication after process death
+
+Design and implement a durable, exact-output publication journal/reconciler for photo, resize, and
+video exports. It must distinguish incomplete publication from a successfully committed output,
+delete only SplitFrame-owned incomplete rows/cache files, preserve valid completed output, and work
+across API 24–36 without broad storage access.
+
+- **Affected module/files:** `:app`; export transaction boundaries, application startup/recovery,
+  focused persistence tests, provider/device tests, and audit documentation.
+- **Risks:** deleting a valid completed export, retaining a visible pre-Q partial, journaling after
+  insertion too late, URI reuse, and disagreement between video Room work state and MediaStore.
+- **Acceptance criteria:** exact durable ownership before vulnerable writes; startup reconciliation
+  is idempotent; incomplete output is removed; committed output is retained; cancellation and
+  process recreation cannot create duplicate success; provider failure remains actionable.
+- **Non-goals:** target-size compression, batch work, UI redesign, localization, billing, ads,
+  schema normalization, or video composition.
+
+Photo, resize, and video publication now synchronously journal a unique output reservation before
+MediaStore insertion, then bind the exact returned content URI before writing bytes. The journal
+records prepared, writing, validated/ready, and published phases plus the exact owned video cache
+path. Startup ignores current-process entries, deletes only journaled incomplete
+rows, retains already-published output, confines cache deletion to `cache/video_exports/*.mp4`, and
+leaves provider failures journaled for retry. Recovery is idempotent and requires no broad storage
+access. Eight focused recovery tests plus all 277 JVM tests, lint, and debug assembly pass.
+
+Controlled process death at each transaction boundary and API 24–29 provider behavior remain manual
+device checks.
+
+## Completed bounded video-resource target
+
+### Bound video selection and export resource use
+
+Add explicit clip-count/duration/output-size limits and disk-space/codec preflight before Media3
+rendering. Keep the accepted sequential composition and current project format unchanged.
+
+The picker and project contract now accept at most 20 clips. Worker preflight rejects output over
+30 minutes or an estimated 2 GiB before rendering. Repository preflight requires an H.264 encoder
+supporting the selected dimensions and enough cache capacity for the working and output copies.
+Four focused JVM tests and a physical API 36 FHD encoder/storage check pass.
+
 ## Next recommended slice
 
-### Close the EXIF orientation allocation leak
+### Validate real video frames, rotation, audio boundaries, and final-frame behavior
 
-Make `ImageSourceReader` release its decoded, decoder-owned bitmap when `Bitmap.createBitmap` throws while applying EXIF orientation. Preserve ownership when the transformation returns the same bitmap and transfer ownership normally when it returns a distinct bitmap.
-
-- **Affected module/files:** `:app`; `export/ImageSourceReader.kt`, focused bitmap-ownership tests, and audit documentation.
-- **Risks:** double recycling when `createBitmap` returns the input, recycling a successfully returned bitmap, masking the original allocation failure, or changing EXIF/sampling/output dimensions.
-- **Acceptance criteria:** recycle the decoded bitmap exactly once if orientation allocation throws; recycle the original exactly once when a distinct oriented bitmap succeeds; do not recycle when orientation is normal or transformation returns the same instance; preserve the original exception; retain MIME validation, EXIF mappings, sampling, dimensions, repository ownership, and offline behavior.
-- **Targeted tests:** normal/same-instance ownership, distinct-result ownership transfer, transformation exception cleanup and original-failure identity, plus focused photo/resize tests, full JVM/lint/assemble, and the existing image-flow connected regressions.
-- **Non-goals:** preview/export geometry, resize zoom/pan, output metadata copying, MediaStore/process-death cleanup, image quality/features, UI, schema, ads, dependencies, signing, or secrets.
+Exercise representative device-generated source clips through preview and export, then compare
+decoded frames, rotation, duration, transition boundaries, replacement audio, and final-frame
+behavior on the supported API/device matrix.
 
 ## Deferred backlog
 
 These remain pending and must be proposed as separate, small slices in the established risk order:
 
-- Add durable/process-death cleanup for pending photo/resize/video rows only through a separate bounded design.
 - Align resize controls with exported pixels and resolve the remaining before/after divider-color mismatch in separate bounded slices.
 - Validate the implemented sequential preview against real exported frames, rotations, audio boundaries, lifecycle transitions, and supported codecs before release.
-- Add video selection/resource limits, disk-space and codec preflight, and abandoned-temp cleanup.
+- Add more aggressive abandoned-temp cleanup only if device evidence shows the durable journal and existing age-bounded sweep are insufficient.
 - Add historical v1→v4 migration fixtures and a deliberate future media-item persistence format strategy; v4→v5 is covered.
 - Correct generated template labels and expose existing favorites/history only after correctness work.
 - Validate and refine app-open/ad rendering; consider adaptive banners and a no-ads purchase only as a separate policy/product decision.

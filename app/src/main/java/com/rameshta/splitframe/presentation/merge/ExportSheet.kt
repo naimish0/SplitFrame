@@ -48,6 +48,8 @@ import com.rameshta.splitframe.ads.LocalExternalUiLauncher
 import com.rameshta.splitframe.domain.ExportResolution
 import com.rameshta.splitframe.domain.ExportResult
 import com.rameshta.splitframe.domain.LayoutMath
+import com.rameshta.splitframe.presentation.localizedRuntimeMessage
+import com.rameshta.splitframe.presentation.labelText
 import com.rameshta.splitframe.ui.components.PrimaryActionButton
 import com.rameshta.splitframe.ui.components.SecondaryActionButton
 import com.rameshta.splitframe.ui.components.StatusMessage
@@ -78,7 +80,10 @@ fun ExportSheet(
     val successMessage = stringResource(R.string.export_success)
     val resultMessage = when (val result = state.exportResult) {
         is ExportResult.Success -> successMessage
-        is ExportResult.Failure -> stringResource(R.string.export_failure, result.reason)
+        is ExportResult.Failure -> stringResource(
+            R.string.export_failure,
+            localizedRuntimeMessage(result.reason),
+        )
         null -> null
     }
     val resultSnackbarKey = when (val result = state.exportResult) {
@@ -137,7 +142,7 @@ fun ExportSheet(
                 StatusMessage(
                     text = stringResource(
                         R.string.export_selected_resolution,
-                        project.exportResolution.label,
+                        project.exportResolution.labelText(),
                         selectedSize.widthPx,
                         selectedSize.heightPx,
                     ),
@@ -148,18 +153,16 @@ fun ExportSheet(
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         ExportResolution.entries.forEach { resolution ->
                             val size = LayoutMath.outputSizeForResolution(project.template, resolution, state.sourceDimensions)
-                            val estimate = formatBytes(LayoutMath.estimatedJpegSizeBytes(size))
                             FilterChip(
                                 selected = project.exportResolution == resolution,
                                 onClick = { onIntent(MergeIntent.SelectExportResolution(resolution)) },
                                 label = {
                                     Text(
                                         stringResource(
-                                            R.string.resolution_option_with_size,
-                                            resolution.label,
+                                            R.string.preset_with_dimensions,
+                                            resolution.labelText(),
                                             size.widthPx,
                                             size.heightPx,
-                                            estimate,
                                         ),
                                     )
                                 },
@@ -191,14 +194,22 @@ fun ExportSheet(
                 }
 
                 when (val result = state.exportResult) {
-                    is ExportResult.Success -> StatusMessage(
-                        text = stringResource(R.string.export_success),
-                        tone = StatusTone.Success,
-                        icon = Icons.Default.CheckCircle,
-                    )
+                    is ExportResult.Success -> {
+                        val savedMessage = stringResource(R.string.export_success)
+                        StatusMessage(
+                            text = result.sizeBytes
+                                ?.let { "$savedMessage · ${formatBytes(it)}" }
+                                ?: savedMessage,
+                            tone = StatusTone.Success,
+                            icon = Icons.Default.CheckCircle,
+                        )
+                    }
                     is ExportResult.Failure -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatusMessage(
-                            text = stringResource(R.string.export_failure, result.reason),
+                            text = stringResource(
+                                R.string.export_failure,
+                                localizedRuntimeMessage(result.reason),
+                            ),
                             tone = StatusTone.Error,
                         )
                         SecondaryActionButton(
@@ -279,7 +290,7 @@ private fun formatBytes(bytes: Long): String {
 
 private fun shareImage(context: Context, savedUri: String) {
     val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "image/jpeg"
+        type = "image/png"
         putExtra(Intent.EXTRA_STREAM, Uri.parse(savedUri))
         putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.share_subject))
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

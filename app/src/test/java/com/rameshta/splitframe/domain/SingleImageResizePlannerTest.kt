@@ -8,6 +8,36 @@ import org.junit.Test
 
 class SingleImageResizePlannerTest {
     @Test
+    fun `percentage preset scales original dimensions`() {
+        val result = SingleImageResizePlanner.plan(
+            original = ImageDimensions(4000, 3000),
+            request = SingleImageResizeRequest(
+                preset = SingleImageResizePreset.Percentage,
+                resizePercent = 25,
+            ),
+        )
+
+        val plan = result as SingleImagePlanResult.Valid
+        assertEquals(ImageDimensions(1000, 750), plan.plan.outputDimensions)
+    }
+
+    @Test
+    fun `percentage outside supported range fails closed`() {
+        listOf(0, 401).forEach { percent ->
+            val result = SingleImageResizePlanner.plan(
+                original = ImageDimensions(4000, 3000),
+                request = SingleImageResizeRequest(
+                    preset = SingleImageResizePreset.Percentage,
+                    resizePercent = percent,
+                ),
+            )
+            assertEquals(
+                SingleImagePlanError.InvalidOutputDimensions,
+                (result as SingleImagePlanResult.Invalid).reason,
+            )
+        }
+    }
+    @Test
     fun `restored output metadata includes fit or fill semantics`() {
         val request = SingleImageResizeRequest(
             preset = SingleImageResizePreset.InstagramSquarePost,
@@ -132,6 +162,22 @@ class SingleImageResizePlannerTest {
         assertEquals(
             SingleImageResizePreset.entries.toSet(),
             ExportPresetCatalog.definitions.map { it.id }.toSet(),
+        )
+    }
+
+    @Test
+    fun regionalOrderingPromotesWhatsAppWithoutChangingTheCatalog() {
+        assertEquals(
+            SingleImageResizePreset.WhatsAppStatus,
+            ExportPresetCatalog.socialAndCommonForRegion("BR").first().id,
+        )
+        assertEquals(
+            ExportPresetCatalog.socialAndCommon,
+            ExportPresetCatalog.socialAndCommonForRegion("unknown"),
+        )
+        assertEquals(
+            ExportPresetCatalog.socialAndCommon.map { it.id }.toSet(),
+            ExportPresetCatalog.socialAndCommonForRegion("IN").map { it.id }.toSet(),
         )
     }
 

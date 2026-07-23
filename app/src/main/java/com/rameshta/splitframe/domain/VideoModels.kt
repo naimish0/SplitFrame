@@ -40,6 +40,11 @@ enum class VideoFitMode {
     FIT,
 }
 
+enum class VideoTransition {
+    Cut,
+    FadeThroughBlack,
+}
+
 enum class VideoSupportStatus {
     Supported,
     UnsupportedMimeType,
@@ -119,6 +124,8 @@ data class VideoMergeProject(
     val canvasAspectRatio: VideoCanvasAspectRatio = VideoCanvasAspectRatio.RATIO_16_9,
     val exportResolution: ExportResolution = ExportResolution.FHD_1080,
     val primaryAudioMediaId: String? = null,
+    val userAudioUri: String? = null,
+    val transition: VideoTransition = VideoTransition.Cut,
     val durationMode: MediaDurationMode = MediaDurationMode.LOOP_SHORTER,
     val spacingDp: Float = 0f,
     val cornerRadiusDp: Float = 0f,
@@ -140,7 +147,7 @@ data class VideoMergeProject(
     val orderedClips: List<VideoClip> get() = orderedMedia.mapNotNull { (it as? MediaSource.Video)?.clip }
     val containsHdr: Boolean get() = clips.values.any { it.isHdr }
     val isComplete: Boolean
-        get() = mediaByCell.size >= MixedMediaLimits.MinItems &&
+        get() = mediaByCell.size in MixedMediaLimits.MinItems..MixedMediaLimits.MaxItems &&
             mediaByCell.values.all { it is MediaSource.Video } &&
             orderedClips.size == mediaByCell.size
     val primaryAudioClip: VideoClip?
@@ -177,8 +184,34 @@ data class MergedVideoTimelinePosition(
 
 object MixedMediaLimits {
     const val MinItems = 2
-    const val MaxItems = Int.MAX_VALUE
+    const val MaxItems = 20
     const val MaxLivePreviewVideos = 2
+    const val MaxTotalTrimmedDurationMs = 30L * 60L * 1_000L
+    const val MaxEstimatedOutputBytes = 2L * 1_024L * 1_024L * 1_024L
+}
+
+internal fun videoExportResourceContractFailure(project: VideoMergeProject): String? {
+    if (project.orderedClips.size > MixedMediaLimits.MaxItems) {
+        return "Choose no more than ${MixedMediaLimits.MaxItems} video clips."
+    }
+    val durationMs = VideoLayoutMath.outputDurationForMergedVideos(project.orderedClips)
+    if (durationMs > MixedMediaLimits.MaxTotalTrimmedDurationMs) {
+        return "Keep the merged video at 30 minutes or less."
+    }
+    if (project.orderedClips.isNotEmpty()) {
+        val outputSize = VideoLayoutMath.outputSizeForMedia(
+            project.canvasAspectRatio,
+            project.exportResolution,
+            project.mediaByCell,
+        )
+        if (
+            VideoLayoutMath.estimateMp4Bytes(outputSize, project.orderedClips) >
+            MixedMediaLimits.MaxEstimatedOutputBytes
+        ) {
+            return "The estimated output is too large. Shorten the project or choose a lower resolution."
+        }
+    }
+    return null
 }
 
 object MixedMediaTemplateCatalog {

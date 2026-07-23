@@ -22,7 +22,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PhotoSizeSelectLarge
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.PrivacyTip
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Card
@@ -66,7 +66,7 @@ fun ModeSelectionScreen(
     onOpenVideoProject: (String) -> Unit,
     onOpenLayout: (String) -> Unit,
     onOpenRecentPhotoExport: (String) -> Unit,
-    onOpenPrivacyPolicy: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val dimens = splitFrameDimens()
     Scaffold(
@@ -74,10 +74,10 @@ fun ModeSelectionScreen(
             SplitFrameTopAppBar(
                 title = stringResource(R.string.app_name),
                 actions = {
-                    IconButton(onClick = onOpenPrivacyPolicy) {
+                    IconButton(onClick = onOpenSettings) {
                         Icon(
-                            imageVector = Icons.Default.PrivacyTip,
-                            contentDescription = stringResource(R.string.privacy_policy),
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = stringResource(R.string.settings),
                         )
                     }
                 },
@@ -368,10 +368,18 @@ private fun RecentPhotoExportCard(
 ) {
     val dimens = splitFrameDimens()
     val title = export.template?.titleText() ?: stringResource(R.string.home_photo_export)
+    val sizeLabel = export.dimensions?.let { dimensions ->
+        stringResource(
+            R.string.preset_with_dimensions,
+            export.resolution.labelText(),
+            dimensions.widthPx,
+            dimensions.heightPx,
+        )
+    } ?: export.resolution.labelText()
     val accessibilityLabel = stringResource(
         R.string.home_open_photo_export_accessibility,
         title,
-        export.resolution.label,
+        sizeLabel,
     )
     Card(
         onClick = onClick,
@@ -401,7 +409,7 @@ private fun RecentPhotoExportCard(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = export.resolution.label,
+                    text = sizeLabel,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

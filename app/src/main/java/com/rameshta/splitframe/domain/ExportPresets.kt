@@ -12,6 +12,7 @@ enum class SingleImageResizePreset {
     LongEdge1080,
     LongEdge2K,
     LongEdge4K,
+    Percentage,
     Scale2x,
     Scale4x,
 }
@@ -25,6 +26,7 @@ sealed interface ExportCanvasRule {
     data class Fixed(val dimensions: ImageDimensions) : ExportCanvasRule
     data class OriginalLongEdge(val longEdgePx: Int) : ExportCanvasRule
     data class OriginalScale(val factor: Int) : ExportCanvasRule
+    data object OriginalPercentage : ExportCanvasRule
     data object DeviceWallpaper : ExportCanvasRule
     data object Custom : ExportCanvasRule
 }
@@ -76,6 +78,11 @@ object ExportPresetCatalog {
             canvasRule = ExportCanvasRule.OriginalLongEdge(3840),
         ),
         ExportPresetDefinition(
+            id = SingleImageResizePreset.Percentage,
+            group = ExportPresetGroup.Resize,
+            canvasRule = ExportCanvasRule.OriginalPercentage,
+        ),
+        ExportPresetDefinition(
             id = SingleImageResizePreset.Scale2x,
             group = ExportPresetGroup.Resize,
             canvasRule = ExportCanvasRule.OriginalScale(2),
@@ -92,6 +99,18 @@ object ExportPresetCatalog {
 
     val resize: List<ExportPresetDefinition> =
         definitions.filter { it.group == ExportPresetGroup.Resize }
+
+    /**
+     * Keeps one canonical preset schema while allowing evidence-led regional ordering.
+     * Unknown/empty regions retain the stable global order.
+     */
+    fun socialAndCommonForRegion(regionCode: String?): List<ExportPresetDefinition> {
+        val preferred = when (regionCode?.uppercase()) {
+            "BR", "ID", "IN", "MX", "NG", "ZA" -> SingleImageResizePreset.WhatsAppStatus
+            else -> null
+        } ?: return socialAndCommon
+        return socialAndCommon.sortedByDescending { it.id == preferred }
+    }
 
     private val definitionsById = definitions.associateBy(ExportPresetDefinition::id)
 

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="resize_image"
+        android:enabled="true"
+        android:icon="@drawable/ic_splitframe_logo"
+        android:shortcutShortLabel="@string/shortcut_resize">
+        <intent
+            android:action="com.rameshta.splitframe.action.RESIZE"
+            android:targetPackage="com.rameshta.splitframe"
+            android:targetClass="com.rameshta.splitframe.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="photo_collage"
+        android:enabled="true"
+        android:icon="@drawable/ic_splitframe_logo"
+        android:shortcutShortLabel="@string/shortcut_collage">
+        <intent
+            android:action="com.rameshta.splitframe.action.COLLAGE"
+            android:targetPackage="com.rameshta.splitframe"
+            android:targetClass="com.rameshta.splitframe.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="video_merge"
+        android:enabled="true"
+        android:icon="@drawable/ic_splitframe_logo"
+        android:shortcutShortLabel="@string/shortcut_video">
+        <intent
+            android:action="com.rameshta.splitframe.action.VIDEO"
+            android:targetPackage="com.rameshta.splitframe"
+            android:targetClass="com.rameshta.splitframe.MainActivity" />
+    </shortcut>
+</shortcuts>

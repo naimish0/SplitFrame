@@ -17,6 +17,7 @@ import com.rameshta.splitframe.domain.ImageTransform
 import com.rameshta.splitframe.domain.LayoutTemplate
 import com.rameshta.splitframe.domain.MediaDurationMode
 import com.rameshta.splitframe.domain.MediaSource
+import com.rameshta.splitframe.domain.MixedMediaLimits
 import com.rameshta.splitframe.domain.VideoCanvasAspectRatio
 import com.rameshta.splitframe.domain.VideoClip
 import com.rameshta.splitframe.domain.VideoFitMode
@@ -119,7 +120,19 @@ class VideoMergeViewModel(
                 )
             }
             is VideoMergeAction.SelectPrimaryAudio -> updateProject { project ->
-                project.copy(primaryAudioMediaId = availableAudioMediaId(project, action.mediaId))
+                project.copy(
+                    primaryAudioMediaId = availableAudioMediaId(project, action.mediaId),
+                    userAudioUri = null,
+                )
+            }
+            is VideoMergeAction.SelectUserAudio -> updateProject { project ->
+                project.copy(
+                    userAudioUri = action.uri?.takeIf { it.length in 2..4_096 && ':' in it },
+                    primaryAudioMediaId = null,
+                )
+            }
+            is VideoMergeAction.SelectTransition -> updateProject {
+                it.copy(transition = action.transition)
             }
             is VideoMergeAction.SelectDurationMode -> updateProject { it.copy(durationMode = action.mode) }
             is VideoMergeAction.SelectExportResolution -> updateProject { it.copy(exportResolution = action.resolution) }
@@ -167,7 +180,8 @@ class VideoMergeViewModel(
                 (result as? MixedMediaMetadataResult.Unsupported)?.failure
             }
             if (validMedia.isNotEmpty()) {
-                val ordered = current.orderedVideoMedia() + validMedia
+                val remaining = (MixedMediaLimits.MaxItems - current.mediaCount).coerceAtLeast(0)
+                val ordered = current.orderedVideoMedia() + validMedia.take(remaining)
                 val targetTemplate = VideoLayoutMath.sequenceTemplateFor(ordered.size, current.canvasAspectRatio)
                 val updated = current.copy(
                     template = targetTemplate,
@@ -762,6 +776,8 @@ class VideoMergeViewModel(
             is VideoMergeIntent.ResetVideoTransform -> VideoMergeAction.ResetVideoTransform(cellIndex)
             is VideoMergeIntent.SelectCanvasAspectRatio -> VideoMergeAction.SelectCanvasAspectRatio(aspectRatio)
             is VideoMergeIntent.SelectPrimaryAudio -> VideoMergeAction.SelectPrimaryAudio(mediaId)
+            is VideoMergeIntent.SelectUserAudio -> VideoMergeAction.SelectUserAudio(uri)
+            is VideoMergeIntent.SelectTransition -> VideoMergeAction.SelectTransition(transition)
             is VideoMergeIntent.SelectDurationMode -> VideoMergeAction.SelectDurationMode(mode)
             is VideoMergeIntent.SelectExportResolution -> VideoMergeAction.SelectExportResolution(resolution)
             is VideoMergeIntent.SelectFitMode -> VideoMergeAction.SelectFitMode(cellIndex, fitMode)

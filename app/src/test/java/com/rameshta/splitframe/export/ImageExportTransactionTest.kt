@@ -17,12 +17,16 @@ class ImageExportTransactionTest {
         val result = transactionalPhotoExport<String>(
             insert = { calls += "insert"; Entry },
             write = { calls += "write:$it" },
+            validate = { calls += "validate:$it" },
             publish = { calls += "publish:$it" },
             rollback = { calls += "rollback:$it"; true },
         )
 
         assertEquals(Entry, result)
-        assertEquals(listOf("insert", "write:$Entry", "publish:$Entry"), calls)
+        assertEquals(
+            listOf("insert", "write:$Entry", "validate:$Entry", "publish:$Entry"),
+            calls,
+        )
     }
 
     @Test
@@ -81,6 +85,27 @@ class ImageExportTransactionTest {
     }
 
     @Test
+    fun validationFailureRollsBackAndSkipsPublish() {
+        val original = IllegalStateException("invalid encoded image")
+        var published = false
+        var rolledBackEntry: String? = null
+
+        val failure = assertThrows(IllegalStateException::class.java) {
+            transactionalPhotoExport<String>(
+                insert = { Entry },
+                write = {},
+                validate = { throw original },
+                publish = { published = true },
+                rollback = { rolledBackEntry = it; true },
+            )
+        }
+
+        assertSame(original, failure)
+        assertFalse(published)
+        assertEquals(Entry, rolledBackEntry)
+    }
+
+    @Test
     fun transactionCancellationRollsBackExactEntryAndPreservesCancellation() {
         val cancellation = CancellationException("export cancelled")
         var rolledBackEntry: String? = null
@@ -113,7 +138,7 @@ class ImageExportTransactionTest {
 
         assertSame(original, failure)
         assertEquals(1, failure.suppressed.size)
-        assertEquals("Could not remove incomplete JPEG export.", failure.suppressed.single().message)
+        assertEquals("Could not remove incomplete photo export.", failure.suppressed.single().message)
     }
 
     @Test
@@ -153,16 +178,16 @@ class ImageExportTransactionTest {
     }
 
     @Test
-    fun jpegWriterRequiresCompressionSuccessAndFlushesSuccessfulOutput() {
+    fun pngWriterRequiresLosslessEncodeSuccessAndFlushesSuccessfulOutput() {
         val failedOutput = RecordingOutputStream()
         val failure = assertThrows(IllegalStateException::class.java) {
-            writeCompressedJpeg(failedOutput) { false }
+            writeLosslessPng(failedOutput) { false }
         }
-        assertEquals("Could not encode JPEG export.", failure.message)
+        assertEquals("Could not encode lossless PNG export.", failure.message)
         assertFalse(failedOutput.flushed)
 
         val successfulOutput = RecordingOutputStream()
-        writeCompressedJpeg(successfulOutput) { output ->
+        writeLosslessPng(successfulOutput) { output ->
             output.write(byteArrayOf(1, 2, 3))
             true
         }

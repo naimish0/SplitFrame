@@ -62,6 +62,13 @@ android {
         buildConfig = true
         compose = true
     }
+    bundle {
+        language {
+            // The in-app picker must work immediately and offline for every shipped locale.
+            // Keep all language resources in the base APK delivered by Google Play.
+            enableSplit = false
+        }
+    }
 }
 
 dependencies {
@@ -70,6 +77,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.appcompat)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

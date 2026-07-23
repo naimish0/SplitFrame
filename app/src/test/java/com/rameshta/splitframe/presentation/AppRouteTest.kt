@@ -61,6 +61,16 @@ class AppRouteTest {
     }
 
     @Test
+    fun languageDestinationSurvivesStateRestoration() {
+        val restored = restoreAppRoute(
+            AppRoute(screen = AppScreen.Language).savedValues(),
+        )
+
+        assertEquals(AppScreen.Language, restored.screen)
+        assertNull(restored.activeVideoProjectId)
+    }
+
+    @Test
     fun corruptSavedVideoRouteFallsBackHomeWithoutAnId() {
         val restored = restoreAppRoute(
             listOf(AppScreen.VideoEditor.name, "deleted-or-malformed", true.toString()),

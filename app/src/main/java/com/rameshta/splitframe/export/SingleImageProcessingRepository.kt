@@ -13,7 +13,9 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import androidx.exifinterface.media.ExifInterface
 import com.rameshta.splitframe.domain.ImageSource
+import com.rameshta.splitframe.domain.ImageMetadataPolicy
 import com.rameshta.splitframe.domain.NormalizedRect
 import com.rameshta.splitframe.domain.SingleImageOutputFormat
 import com.rameshta.splitframe.domain.SingleImageOutputMetadata
@@ -23,24 +25,30 @@ import com.rameshta.splitframe.domain.SingleImagePlanResult
 import com.rameshta.splitframe.domain.SingleImageResizePlan
 import com.rameshta.splitframe.domain.SingleImageResizePlanner
 import com.rameshta.splitframe.domain.SingleImageResizeRequest
+import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
-class SingleImageProcessingRepository(
+class SingleImageProcessingRepository internal constructor(
     private val context: Context,
     private val imageSourceReader: ImageSourceReader,
+    private val publicationJournal: ExportPublicationJournal,
 ) {
     fun isReadable(source: ImageSource): Boolean = imageSourceReader.dimensions(source) != null
 
+    fun dimensions(source: ImageSource): com.rameshta.splitframe.domain.ImageDimensions? =
+        imageSourceReader.dimensions(source)
+
     fun plan(source: ImageSource, request: SingleImageResizeRequest): SingleImagePlanResult {
-        val dimensions = imageSourceReader.dimensions(source)
+        val dimensions = dimensions(source)
             ?: return SingleImagePlanResult.Invalid(SingleImagePlanError.InvalidDimensions)
         return SingleImageResizePlanner.plan(dimensions, request)
     }
@@ -82,11 +90,11 @@ class SingleImageProcessingRepository(
             currentCoroutineContext().ensureActive()
             onProgress(0.78f)
 
-            val savedUri = saveBitmap(output, request)
-            val outputBytes = mediaSizeBytes(savedUri)
+            val saved = saveBitmap(output, request, source)
+            val outputBytes = mediaSizeBytes(saved.uri)
             SingleImageProcessResult.Success(
-                source = ImageSource.LocalUri(savedUri.toString()),
-                savedUri = savedUri.toString(),
+                source = ImageSource.LocalUri(saved.uri.toString()),
+                savedUri = saved.uri.toString(),
                 plan = plan,
                 metadata = SingleImageOutputMetadata(
                     originalDimensions = plan.originalDimensions,
@@ -94,10 +102,11 @@ class SingleImageProcessingRepository(
                     originalBytes = originalBytes,
                     outputBytes = outputBytes,
                     outputFormat = request.outputFormat,
-                    encodingQuality = request.encodingQuality.takeUnless {
+                    encodingQuality = saved.encodingQuality.takeUnless {
                         request.outputFormat == SingleImageOutputFormat.Png
                     },
                     contentMode = request.contentMode,
+                    metadataPolicy = request.metadataPolicy,
                 ),
             )
         } catch (oom: OutOfMemoryError) {
@@ -161,11 +170,46 @@ class SingleImageProcessingRepository(
         }
     }
 
-    private suspend fun saveBitmap(bitmap: Bitmap, request: SingleImageResizeRequest): Uri {
+    private suspend fun saveBitmap(
+        bitmap: Bitmap,
+        request: SingleImageResizeRequest,
+        source: ImageSource.LocalUri,
+    ): SavedImageOutput {
         val processingContext = currentCoroutineContext()
+        val targetBytes = request.targetSizeBytes
+            ?.takeIf { request.outputFormat != SingleImageOutputFormat.Png }
+        if (targetBytes != null) {
+            require(targetBytes in MinTargetBytes..MaxTargetBytes) {
+                "Choose a target file size between 10 KB and 50 MB."
+            }
+        }
+        val encodedTarget = targetBytes?.let { target ->
+            chooseTargetEncoding(
+                targetBytes = target,
+                maximumQuality = request.encodingQuality.coerceIn(MinEncodingQuality, 100),
+                minimumQuality = MinEncodingQuality,
+            ) { quality ->
+                processingContext.ensureActive()
+                ByteArrayOutputStream().use { bytes ->
+                    check(
+                        bitmap.compress(
+                            request.outputFormat.compressFormat(Build.VERSION.SDK_INT),
+                            quality,
+                            bytes,
+                        ),
+                    ) { "Could not encode output image." }
+                    bytes.toByteArray()
+                }
+            }
+        }
+        val effectiveQuality = encodedTarget?.quality ?: request.encodingQuality.coerceIn(60, 100)
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val displayName =
+            "SplitFrame_Image_${timestamp}_${UUID.randomUUID().toString().take(8)}.${request.outputFormat.extension}"
+        val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val journalId = publicationJournal.prepare(collection.toString(), displayName)
         val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, "SplitFrame_Image_$timestamp.${request.outputFormat.extension}")
+            put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
             put(MediaStore.Images.Media.MIME_TYPE, request.outputFormat.mimeType)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/SplitFrame")
@@ -176,21 +220,53 @@ class SingleImageProcessingRepository(
         return transactionalSingleImageExport(
             insert = {
                 processingContext.ensureActive()
-                resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                resolver.insert(collection, values)
             },
+            afterInsert = { uri -> publicationJournal.recordWriting(journalId, uri.toString()) },
             write = { uri ->
                 processingContext.ensureActive()
                 resolver.openOutputStream(uri)?.use { output ->
                     processingContext.ensureActive()
-                    writeCompressedSingleImage(output) { stream ->
-                        bitmap.compress(
-                            request.outputFormat.compressFormat(Build.VERSION.SDK_INT),
-                            request.encodingQuality.coerceIn(60, 100),
-                            stream,
-                        )
+                    if (encodedTarget != null) {
+                        output.write(encodedTarget.bytes)
+                        output.flush()
+                    } else {
+                        writeCompressedSingleImage(output) { stream ->
+                            bitmap.compress(
+                                request.outputFormat.compressFormat(Build.VERSION.SDK_INT),
+                                effectiveQuality,
+                                stream,
+                            )
+                        }
                     }
                 } ?: error("Could not write output image.")
+                if (request.metadataPolicy == ImageMetadataPolicy.PreserveDetails) {
+                    copyPreservedMetadata(
+                        sourceUri = Uri.parse(source.uri),
+                        outputUri = uri,
+                    )
+                }
+                processingContext.ensureActive()
             },
+            validate = { uri ->
+                processingContext.ensureActive()
+                validateEncodedImageOutput(
+                    resolver = resolver,
+                    uri = uri,
+                    expectedWidthPx = bitmap.width,
+                    expectedHeightPx = bitmap.height,
+                    expectedMimeType = request.outputFormat.mimeType,
+                )
+                targetBytes?.let { target ->
+                    val actualBytes = mediaSizeBytes(uri)
+                        ?: error("Could not verify the target file size.")
+                    check(actualBytes <= target) {
+                        "Preserved photo details exceed the target size. Choose a larger target or remove metadata."
+                    }
+                }
+                processingContext.ensureActive()
+            },
+            onReadyToPublish = { publicationJournal.markReadyToPublish(journalId) },
             publish = { uri ->
                 processingContext.ensureActive()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -203,9 +279,111 @@ class SingleImageProcessingRepository(
                 }
                 processingContext.ensureActive()
             },
-            rollback = { uri -> resolver.delete(uri, null, null) > 0 },
+            afterPublish = { publicationJournal.markPublished(journalId) },
+            commit = { publicationJournal.remove(journalId) },
+            rollback = { uri ->
+                (resolver.delete(uri, null, null) > 0).also { deleted ->
+                    if (deleted) publicationJournal.remove(journalId)
+                }
+            },
+        ).let { SavedImageOutput(it, effectiveQuality) }
+    }
+
+    private fun copyPreservedMetadata(sourceUri: Uri, outputUri: Uri) {
+        val resolver = context.contentResolver
+        resolver.openFileDescriptor(sourceUri, "r")?.use { sourceDescriptor ->
+            resolver.openFileDescriptor(outputUri, "rw")?.use { outputDescriptor ->
+                val sourceExif = ExifInterface(sourceDescriptor.fileDescriptor)
+                val outputExif = ExifInterface(outputDescriptor.fileDescriptor)
+                PreservedExifTags.forEach { tag ->
+                    sourceExif.getAttribute(tag)?.let { value ->
+                        outputExif.setAttribute(tag, value)
+                    }
+                }
+                outputExif.setAttribute(
+                    ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_NORMAL.toString(),
+                )
+                outputExif.saveAttributes()
+            } ?: error("Could not update output photo details.")
+        } ?: error("Could not read source photo details.")
+    }
+
+    private companion object {
+        const val MinEncodingQuality = 40
+        const val MinTargetBytes = 10L * 1_024L
+        const val MaxTargetBytes = 50L * 1_024L * 1_024L
+        val PreservedExifTags = listOf(
+            ExifInterface.TAG_DATETIME,
+            ExifInterface.TAG_DATETIME_ORIGINAL,
+            ExifInterface.TAG_DATETIME_DIGITIZED,
+            ExifInterface.TAG_MAKE,
+            ExifInterface.TAG_MODEL,
+            ExifInterface.TAG_SOFTWARE,
+            ExifInterface.TAG_ARTIST,
+            ExifInterface.TAG_COPYRIGHT,
+            ExifInterface.TAG_EXPOSURE_TIME,
+            ExifInterface.TAG_F_NUMBER,
+            ExifInterface.TAG_ISO_SPEED_RATINGS,
+            ExifInterface.TAG_FOCAL_LENGTH,
+            ExifInterface.TAG_FLASH,
+            ExifInterface.TAG_WHITE_BALANCE,
+            ExifInterface.TAG_GPS_LATITUDE,
+            ExifInterface.TAG_GPS_LATITUDE_REF,
+            ExifInterface.TAG_GPS_LONGITUDE,
+            ExifInterface.TAG_GPS_LONGITUDE_REF,
+            ExifInterface.TAG_GPS_ALTITUDE,
+            ExifInterface.TAG_GPS_ALTITUDE_REF,
+            ExifInterface.TAG_GPS_TIMESTAMP,
+            ExifInterface.TAG_GPS_DATESTAMP,
         )
     }
+}
+
+private data class SavedImageOutput(
+    val uri: Uri,
+    val encodingQuality: Int,
+)
+
+internal data class TargetEncoding(
+    val quality: Int,
+    val bytes: ByteArray,
+)
+
+internal fun chooseTargetEncoding(
+    targetBytes: Long,
+    maximumQuality: Int,
+    minimumQuality: Int,
+    encode: (quality: Int) -> ByteArray,
+): TargetEncoding {
+    require(targetBytes > 0)
+    require(minimumQuality in 0..100 && maximumQuality in minimumQuality..100)
+    val encodedByQuality = mutableMapOf<Int, ByteArray>()
+    fun encoded(quality: Int): ByteArray =
+        encodedByQuality.getOrPut(quality) { encode(quality) }
+
+    val maximum = encoded(maximumQuality)
+    if (maximum.size <= targetBytes) return TargetEncoding(maximumQuality, maximum)
+
+    val minimum = encoded(minimumQuality)
+    check(minimum.size <= targetBytes) {
+        "The target file size is too small for this image. Choose a larger target or smaller dimensions."
+    }
+
+    var low = minimumQuality
+    var high = maximumQuality - 1
+    var best = TargetEncoding(minimumQuality, minimum)
+    while (low <= high) {
+        val quality = (low + high) / 2
+        val bytes = encoded(quality)
+        if (bytes.size <= targetBytes) {
+            best = TargetEncoding(quality, bytes)
+            low = quality + 1
+        } else {
+            high = quality - 1
+        }
+    }
+    return best
 }
 
 private fun NormalizedRect.toBitmapRect(widthPx: Int, heightPx: Int): Rect {
@@ -247,14 +425,24 @@ internal fun writeCompressedSingleImage(
 
 internal fun <Entry : Any> transactionalSingleImageExport(
     insert: () -> Entry?,
+    afterInsert: (Entry) -> Unit = {},
     write: (Entry) -> Unit,
+    validate: (Entry) -> Unit = {},
+    onReadyToPublish: (Entry) -> Unit = {},
     publish: (Entry) -> Unit,
+    afterPublish: (Entry) -> Unit = {},
+    commit: (Entry) -> Unit = {},
     rollback: (Entry) -> Boolean,
 ): Entry {
     val entry = insert() ?: error("Could not create output image.")
     return try {
+        afterInsert(entry)
         write(entry)
+        validate(entry)
+        onReadyToPublish(entry)
         publish(entry)
+        afterPublish(entry)
+        commit(entry)
         entry
     } catch (failure: Throwable) {
         val rollbackFailure = runCatching {

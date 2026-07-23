@@ -19,6 +19,7 @@ import com.rameshta.splitframe.domain.VideoFitMode
 import com.rameshta.splitframe.domain.VideoLayout
 import com.rameshta.splitframe.domain.VideoLayoutMath
 import com.rameshta.splitframe.domain.VideoMergeProject
+import com.rameshta.splitframe.domain.VideoTransition
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.util.UUID
@@ -36,6 +37,7 @@ class VideoProjectStore(
     private val exportWorkDao: VideoExportWorkDao,
     private val recentProjectDao: RecentProjectDao? = null,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val defaultProjectName: () -> String = { DefaultProjectName },
 ) {
     suspend fun getOrCreate(projectId: String?): VideoMergeProject {
         val existing = projectId?.let { get(it) }
@@ -75,7 +77,7 @@ class VideoProjectStore(
 
     suspend fun save(
         project: VideoMergeProject,
-        initialName: String = DefaultProjectName,
+        initialName: String = defaultProjectName(),
     ): Boolean {
         val updatedAt = clock()
         val entity = project.toEntity(updatedAt)
@@ -101,7 +103,7 @@ class VideoProjectStore(
         }
         return recentDao.resetActiveVideoProject(
             project = reset.toEntity(updatedAt),
-            recentProject = reset.toRecentEntity(DefaultProjectName, updatedAt),
+            recentProject = reset.toRecentEntity(defaultProjectName(), updatedAt),
         )
     }
 
@@ -156,9 +158,12 @@ class VideoProjectStore(
             clip1 = clips[1]?.encode(),
             templateId = template.id,
             selectedCellIndex = selectedCellIndex,
-            primaryAudioMediaId = primaryAudioMediaId,
+            primaryAudioMediaId = userAudioUri?.let { UserAudioPrefix + it } ?: primaryAudioMediaId,
             mediaItems = mediaByCell.encodeMediaItems(),
-            mergeMode = LegacySequenceMergeMode,
+            mergeMode = when (transition) {
+                VideoTransition.Cut -> LegacySequenceMergeMode
+                VideoTransition.FadeThroughBlack -> FadeSequenceMergeMode
+            },
         )
 
     private fun VideoMergeProject.toRecentEntity(
@@ -179,7 +184,7 @@ class VideoProjectStore(
         )
 
     private fun VideoProjectEntity.toProjectOrNull(): VideoMergeProject? = runCatching {
-        require(mergeMode == LegacySequenceMergeMode)
+        require(mergeMode == LegacySequenceMergeMode || mergeMode == FadeSequenceMergeMode)
         val aspectRatio = enumValueStrict<VideoCanvasAspectRatio>(canvasAspectRatio)
         val legacyLayout = enumValueOrDefault(layout, VideoLayout.SIDE_BY_SIDE)
         val decodedMedia = when {
@@ -203,7 +208,18 @@ class VideoProjectStore(
             template = template,
             canvasAspectRatio = aspectRatio,
             exportResolution = enumValueStrict(exportResolution),
-            primaryAudioMediaId = primaryAudioMediaId ?: legacyAudioMediaId(primaryAudioSource, decodedMedia),
+            primaryAudioMediaId = primaryAudioMediaId
+                ?.takeUnless { it.startsWith(UserAudioPrefix) }
+                ?: legacyAudioMediaId(primaryAudioSource, decodedMedia),
+            userAudioUri = primaryAudioMediaId
+                ?.takeIf { it.startsWith(UserAudioPrefix) }
+                ?.removePrefix(UserAudioPrefix)
+                ?.takeIf { it.length in 2..4_096 && ':' in it },
+            transition = if (mergeMode == FadeSequenceMergeMode) {
+                VideoTransition.FadeThroughBlack
+            } else {
+                VideoTransition.Cut
+            },
             durationMode = durationMode.toDurationModeStrict(),
             spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
             cornerRadiusDp = cornerRadiusDp,
@@ -441,11 +457,13 @@ class VideoProjectStore(
     private fun String.urlDecode(): String = URLDecoder.decode(this, Charsets.UTF_8.name())
 
     private companion object {
+        const val UserAudioPrefix = "user-audio:"
         const val FieldSeparator = "\t"
         const val RowSeparator = "\n"
         const val TypeImage = "image"
         const val TypeVideo = "video"
         const val LegacySequenceMergeMode = "SEQUENCE"
+        const val FadeSequenceMergeMode = "SEQUENCE_FADE_THROUGH_BLACK"
         const val ProjectTypeVideo = "VIDEO"
         const val DefaultProjectName = "Video project"
         const val ProjectFormatVersion = 1

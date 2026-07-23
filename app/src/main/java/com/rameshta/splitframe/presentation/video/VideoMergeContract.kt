@@ -10,6 +10,7 @@ import com.rameshta.splitframe.domain.VideoCanvasAspectRatio
 import com.rameshta.splitframe.domain.VideoClip
 import com.rameshta.splitframe.domain.VideoFitMode
 import com.rameshta.splitframe.domain.VideoMergeProject
+import com.rameshta.splitframe.domain.VideoTransition
 
 sealed interface VideoMergeIntent {
     data class SelectMedia(val uris: List<String>) : VideoMergeIntent
@@ -33,6 +34,8 @@ sealed interface VideoMergeIntent {
     data class ResetVideoTransform(val cellIndex: Int) : VideoMergeIntent
     data class SelectCanvasAspectRatio(val aspectRatio: VideoCanvasAspectRatio) : VideoMergeIntent
     data class SelectPrimaryAudio(val mediaId: String?) : VideoMergeIntent
+    data class SelectUserAudio(val uri: String?) : VideoMergeIntent
+    data class SelectTransition(val transition: VideoTransition) : VideoMergeIntent
     data class SelectDurationMode(val mode: MediaDurationMode) : VideoMergeIntent
     data class SelectExportResolution(val resolution: ExportResolution) : VideoMergeIntent
     data class SelectFitMode(val cellIndex: Int, val fitMode: VideoFitMode) : VideoMergeIntent
@@ -69,6 +72,8 @@ sealed interface VideoMergeAction {
     data class ResetVideoTransform(val cellIndex: Int) : VideoMergeAction
     data class SelectCanvasAspectRatio(val aspectRatio: VideoCanvasAspectRatio) : VideoMergeAction
     data class SelectPrimaryAudio(val mediaId: String?) : VideoMergeAction
+    data class SelectUserAudio(val uri: String?) : VideoMergeAction
+    data class SelectTransition(val transition: VideoTransition) : VideoMergeAction
     data class SelectDurationMode(val mode: MediaDurationMode) : VideoMergeAction
     data class SelectExportResolution(val resolution: ExportResolution) : VideoMergeAction
     data class SelectFitMode(val cellIndex: Int, val fitMode: VideoFitMode) : VideoMergeAction

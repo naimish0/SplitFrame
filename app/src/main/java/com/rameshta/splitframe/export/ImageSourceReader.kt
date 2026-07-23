@@ -49,7 +49,7 @@ class ImageSourceReader(
             val dimensions = dimensions(source) ?: return null
             val options = BitmapFactory.Options().apply {
                 inPreferredConfig = Bitmap.Config.ARGB_8888
-            inSampleSize = imageDecodeSampleSize(dimensions, targetLongEdgePx)
+                inSampleSize = imageDecodeSampleSize(dimensions, targetLongEdgePx)
             }
             val bitmap = decode(source, options) ?: return null
             bitmap.applyOrientation(exifOrientation(source))

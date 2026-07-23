@@ -44,7 +44,7 @@ sealed interface MergeIntent {
     data class UpdateBorderWidth(val dp: Float) : MergeIntent
     data class UpdateBorderStyle(val style: CollageBorderStyle) : MergeIntent
     data class UpdateCropShape(val cellIndex: Int, val shape: CropShape) : MergeIntent
-    data object AddTextLayer : MergeIntent
+    data class AddTextLayer(val initialText: String) : MergeIntent
     data class UpdateTextLayer(val layer: CollageTextLayer) : MergeIntent
     data class DuplicateTextLayer(val layerId: String) : MergeIntent
     data class DeleteTextLayer(val layerId: String) : MergeIntent
@@ -87,7 +87,7 @@ sealed interface MergeAction {
     data class UpdateBorderWidth(val dp: Float) : MergeAction
     data class UpdateBorderStyle(val style: CollageBorderStyle) : MergeAction
     data class UpdateCropShape(val cellIndex: Int, val shape: CropShape) : MergeAction
-    data object AddTextLayer : MergeAction
+    data class AddTextLayer(val initialText: String) : MergeAction
     data class UpdateTextLayer(val layer: CollageTextLayer) : MergeAction
     data class DuplicateTextLayer(val layerId: String) : MergeAction
     data class DeleteTextLayer(val layerId: String) : MergeAction

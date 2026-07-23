@@ -20,12 +20,32 @@ data class SingleImageResizeRequest(
     val preset: SingleImageResizePreset = SingleImageResizePreset.Scale2x,
     val outputFormat: SingleImageOutputFormat = SingleImageOutputFormat.Jpeg,
     val encodingQuality: Int = 94,
+    val resizePercent: Int = 100,
+    val targetSizeValue: Int? = null,
+    val targetSizeUnit: TargetSizeUnit = TargetSizeUnit.KB,
+    val metadataPolicy: ImageMetadataPolicy = ImageMetadataPolicy.RemoveMetadata,
     val customWidthPx: Int? = null,
     val customHeightPx: Int? = null,
     val lockAspectRatio: Boolean = true,
     val contentMode: ExportContentMode = ExportContentMode.Fit,
     val deviceWallpaperDimensions: ImageDimensions? = null,
-)
+) {
+    val targetSizeBytes: Long?
+        get() = targetSizeValue?.takeIf { it > 0 }?.let(targetSizeUnit::toBytes)
+}
+
+enum class TargetSizeUnit(val bytesPerUnit: Long) {
+    KB(1_024L),
+    MB(1_024L * 1_024L);
+
+    fun toBytes(value: Int): Long =
+        value.toLong().coerceAtMost(Long.MAX_VALUE / bytesPerUnit) * bytesPerUnit
+}
+
+enum class ImageMetadataPolicy {
+    PreserveDetails,
+    RemoveMetadata,
+}
 
 enum class ExportContentMode {
     Fit,
@@ -36,6 +56,10 @@ data class SingleImageExportSettings(
     val preset: SingleImageResizePreset = SingleImageResizePreset.Scale2x,
     val outputFormat: SingleImageOutputFormat = SingleImageOutputFormat.Jpeg,
     val encodingQuality: Int = 94,
+    val resizePercent: Int = 100,
+    val targetSizeValue: Int? = null,
+    val targetSizeUnit: TargetSizeUnit = TargetSizeUnit.KB,
+    val metadataPolicy: ImageMetadataPolicy = ImageMetadataPolicy.RemoveMetadata,
     val customWidthPx: Int? = null,
     val customHeightPx: Int? = null,
     val lockAspectRatio: Boolean = true,
@@ -46,6 +70,10 @@ data class SingleImageExportSettings(
             preset = preset,
             outputFormat = outputFormat,
             encodingQuality = encodingQuality,
+            resizePercent = resizePercent,
+            targetSizeValue = targetSizeValue,
+            targetSizeUnit = targetSizeUnit,
+            metadataPolicy = metadataPolicy,
             customWidthPx = customWidthPx,
             customHeightPx = customHeightPx,
             lockAspectRatio = lockAspectRatio,
@@ -59,6 +87,10 @@ data class SingleImageExportSettings(
                 preset = request.preset,
                 outputFormat = request.outputFormat,
                 encodingQuality = request.encodingQuality,
+                resizePercent = request.resizePercent,
+                targetSizeValue = request.targetSizeValue,
+                targetSizeUnit = request.targetSizeUnit,
+                metadataPolicy = request.metadataPolicy,
                 customWidthPx = request.customWidthPx,
                 customHeightPx = request.customHeightPx,
                 lockAspectRatio = request.lockAspectRatio,
@@ -66,6 +98,11 @@ data class SingleImageExportSettings(
             )
     }
 }
+
+data class SavedResizePreset(
+    val name: String,
+    val settings: SingleImageExportSettings,
+)
 
 data class SingleImageCanvasGeometry(
     val sourceRect: NormalizedRect,
@@ -101,6 +138,7 @@ data class SingleImageOutputMetadata(
     val outputFormat: SingleImageOutputFormat,
     val encodingQuality: Int?,
     val contentMode: ExportContentMode,
+    val metadataPolicy: ImageMetadataPolicy = ImageMetadataPolicy.RemoveMetadata,
 ) {
     val comparison: SingleImageComparisonStats
         get() = SingleImageComparisonMath.calculate(originalBytes, outputBytes)
@@ -113,10 +151,17 @@ fun SingleImageOutputMetadata.matches(
     originalDimensions == plan.originalDimensions &&
         outputDimensions == plan.outputDimensions &&
         outputFormat == request.outputFormat &&
-        encodingQuality == request.encodingQuality.takeUnless {
-            request.outputFormat == SingleImageOutputFormat.Png
-        } &&
-        contentMode == request.contentMode
+        encodingMatches(request) &&
+        contentMode == request.contentMode &&
+        metadataPolicy == request.metadataPolicy
+
+private fun SingleImageOutputMetadata.encodingMatches(request: SingleImageResizeRequest): Boolean {
+    if (request.outputFormat == SingleImageOutputFormat.Png) return encodingQuality == null
+    val target = request.targetSizeBytes ?: return encodingQuality == request.encodingQuality
+    return encodingQuality != null &&
+        encodingQuality in 40..request.encodingQuality &&
+        outputBytes?.let { it <= target } == true
+}
 
 data class SingleImageComparisonStats(
     val originalBytes: Long?,
@@ -327,12 +372,23 @@ object SingleImageResizePlanner {
                 safeScale(original.widthPx, canvasRule.factor),
                 safeScale(original.heightPx, canvasRule.factor),
             )
+            ExportCanvasRule.OriginalPercentage -> dimensionsForPercentage(original, request.resizePercent)
             ExportCanvasRule.DeviceWallpaper -> request.deviceWallpaperDimensions ?: ImageDimensions(0, 0)
             ExportCanvasRule.Custom -> customDimensions(original, request)
         }
 
     private fun safeScale(value: Int, factor: Int): Int =
         (value.toLong() * factor.toLong()).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+
+    private fun dimensionsForPercentage(original: ImageDimensions, percent: Int): ImageDimensions {
+        if (percent !in MinResizePercent..MaxResizePercent) return ImageDimensions(0, 0)
+        return ImageDimensions(
+            widthPx = ((original.widthPx.toLong() * percent) / 100L)
+                .coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+            heightPx = ((original.heightPx.toLong() * percent) / 100L)
+                .coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+        )
+    }
 
     private fun dimensionsForLongEdge(original: ImageDimensions, longEdge: Int): ImageDimensions {
         val scale = longEdge / original.longEdgePx.toFloat()
@@ -387,4 +443,6 @@ object SingleImageResizePlanner {
     }
 
     private const val ScaleTolerance = 0.0001f
+    const val MinResizePercent = 1
+    const val MaxResizePercent = 400
 }

@@ -104,10 +104,14 @@ import com.rameshta.splitframe.domain.ImageTransform
 import com.rameshta.splitframe.domain.LayoutMath
 import com.rameshta.splitframe.domain.MergedVideoTimelinePosition
 import com.rameshta.splitframe.domain.MediaSource
+import com.rameshta.splitframe.domain.MixedMediaLimits
 import com.rameshta.splitframe.domain.VideoCanvasAspectRatio
 import com.rameshta.splitframe.domain.VideoClip
 import com.rameshta.splitframe.domain.VideoLayoutMath
 import com.rameshta.splitframe.domain.VideoMergeProject
+import com.rameshta.splitframe.domain.VideoTransition
+import com.rameshta.splitframe.presentation.localizedRuntimeMessage
+import com.rameshta.splitframe.presentation.labelText
 import com.rameshta.splitframe.ui.components.PrimaryActionButton
 import com.rameshta.splitframe.ui.components.SecondaryActionButton
 import com.rameshta.splitframe.ui.components.SplitFrameSection
@@ -131,7 +135,7 @@ fun VideoEditorScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingSinglePickCellIndex by remember { mutableStateOf<Int?>(null) }
     val multiPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(),
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = MixedMediaLimits.MaxItems),
     ) { uris ->
         if (uris.isNotEmpty()) {
             uris.forEach(context::persistMediaUriAccessIfSupported)
@@ -146,6 +150,21 @@ fun VideoEditorScreen(
         if (uri != null) {
             context.persistMediaUriAccessIfSupported(uri)
             onIntent(VideoMergeIntent.ReplaceMedia(targetCell, uri.toString()))
+        }
+    }
+    val audioPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            context.persistMediaUriAccessIfSupported(uri)
+            onIntent(VideoMergeIntent.SelectUserAudio(uri.toString()))
+        }
+    }
+    val pickUserAudio = {
+        if (!state.isExporting) {
+            externalUiLauncher.launch(ExternalUiReason.MediaPicker) {
+                audioPicker.launch(arrayOf("audio/*"))
+            }
         }
     }
     val pickMixed = {
@@ -250,6 +269,7 @@ fun VideoEditorScreen(
                             onPickMedia = pickMixed,
                             onPickCellMedia = ::pickMediaForCell,
                             onReplaceSelected = replaceSelected,
+                            onPickUserAudio = pickUserAudio,
                             modifier = Modifier.weight(1f),
                         )
                         PersistentExportAction(state = state, onIntent = onIntent)
@@ -275,6 +295,7 @@ fun VideoEditorScreen(
                         onPickMedia = pickMixed,
                         onPickCellMedia = ::pickMediaForCell,
                         onReplaceSelected = replaceSelected,
+                        onPickUserAudio = pickUserAudio,
                         modifier = Modifier.weight(1f),
                     )
                     PersistentExportAction(state = state, onIntent = onIntent)
@@ -599,6 +620,7 @@ private fun EditorControls(
     onPickMedia: () -> Unit,
     onPickCellMedia: (Int) -> Unit,
     onReplaceSelected: () -> Unit,
+    onPickUserAudio: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -607,7 +629,7 @@ private fun EditorControls(
     ) {
         MediaSelectionSection(state, onPickMedia)
         MediaThumbnailStrip(state, onIntent, onPickCellMedia)
-        VideoTools(state, onIntent, onReplaceSelected, onPickMedia)
+        VideoTools(state, onIntent, onReplaceSelected, onPickMedia, onPickUserAudio)
         VideoExportPanel(state)
         Spacer(Modifier.height(4.dp))
     }
@@ -712,6 +734,7 @@ private fun VideoTools(
     onIntent: (VideoMergeIntent) -> Unit,
     onReplaceSelected: () -> Unit,
     onPickMedia: () -> Unit,
+    onPickUserAudio: () -> Unit,
 ) {
     val project = state.project ?: return
     SplitFrameSection(title = stringResource(R.string.video_crop_position)) {
@@ -747,7 +770,28 @@ private fun VideoTools(
             )
         }
         DurationAndResolutionControls(project = project, onIntent = onIntent)
+        Text(text = stringResource(R.string.video_transition), style = MaterialTheme.typography.titleSmall)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            VideoTransition.entries.forEach { transition ->
+                FilterChip(
+                    selected = project.transition == transition,
+                    onClick = { onIntent(VideoMergeIntent.SelectTransition(transition)) },
+                    label = {
+                        Text(
+                            stringResource(
+                                if (transition == VideoTransition.Cut) {
+                                    R.string.video_transition_cut
+                                } else {
+                                    R.string.video_transition_fade
+                                },
+                            ),
+                        )
+                    },
+                )
+            }
+        }
         SelectedMediaControls(state = state, onIntent = onIntent)
+        AudioControls(project = project, onIntent = onIntent, onPickUserAudio = onPickUserAudio)
     }
 }
 
@@ -756,6 +800,7 @@ private fun VideoTools(
 private fun AudioControls(
     project: VideoMergeProject,
     onIntent: (VideoMergeIntent) -> Unit,
+    onPickUserAudio: () -> Unit,
 ) {
     val videos = project.template.cells.mapNotNull { cell ->
         (project.mediaByCell[cell.index] as? MediaSource.Video)?.let { cell.index to it }
@@ -765,7 +810,7 @@ private fun AudioControls(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             AudioChip(
                 text = stringResource(R.string.video_audio_none),
-                selected = project.primaryAudioMediaId == null,
+                selected = project.primaryAudioMediaId == null && project.userAudioUri == null,
                 enabled = true,
                 onClick = { onIntent(VideoMergeIntent.SelectPrimaryAudio(null)) },
             )
@@ -777,6 +822,19 @@ private fun AudioControls(
                     onClick = { onIntent(VideoMergeIntent.SelectPrimaryAudio(media.id)) },
                 )
             }
+            AudioChip(
+                text = stringResource(R.string.video_audio_user_owned),
+                selected = project.userAudioUri != null,
+                enabled = true,
+                onClick = onPickUserAudio,
+            )
+        }
+        if (project.userAudioUri != null) {
+            Text(
+                text = stringResource(R.string.video_audio_user_owned_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -809,7 +867,7 @@ private fun DurationAndResolutionControls(
                 FilterChip(
                     selected = project.exportResolution == resolution,
                     onClick = { onIntent(VideoMergeIntent.SelectExportResolution(resolution)) },
-                    label = { Text(resolution.label) },
+                    label = { Text(resolution.labelText()) },
                 )
             }
         }
@@ -998,7 +1056,13 @@ private fun VideoExportPanel(state: VideoMergeState) {
                     )
                 }
                 is com.rameshta.splitframe.domain.ExportResult.Failure ->
-                    StatusMessage(text = stringResource(R.string.video_export_failure, result.reason), tone = StatusTone.Error)
+                    StatusMessage(
+                        text = stringResource(
+                            R.string.video_export_failure,
+                            localizedRuntimeMessage(result.reason),
+                        ),
+                        tone = StatusTone.Error,
+                    )
                 null -> Unit
             }
         }

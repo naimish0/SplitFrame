@@ -181,7 +181,7 @@ class MergeViewModel(
                 )
             }
             is MergeAction.UpdateCropShape -> updateCropShape(action.cellIndex, action.shape)
-            MergeAction.AddTextLayer -> addTextLayer()
+            is MergeAction.AddTextLayer -> addTextLayer(action.initialText)
             is MergeAction.UpdateTextLayer -> updateTextLayer(action.layer)
             is MergeAction.DuplicateTextLayer -> duplicateTextLayer(action.layerId)
             is MergeAction.DeleteTextLayer -> deleteTextLayer(action.layerId)
@@ -533,7 +533,7 @@ class MergeViewModel(
         }
     }
 
-    private fun addTextLayer() {
+    private fun addTextLayer(initialText: String) {
         val project = _state.value.project ?: return
         if (project.textLayers.size >= MaxTextLayers) return
         val offset = project.textLayers.size.coerceAtMost(6) * 0.035f
@@ -541,7 +541,7 @@ class MergeViewModel(
             it.copy(
                 textLayers = it.textLayers + CollageTextLayer(
                     id = UUID.randomUUID().toString(),
-                    text = "Text",
+                    text = initialText,
                     centerX = (0.5f + offset).coerceAtMost(0.8f),
                     centerY = (0.5f + offset).coerceAtMost(0.8f),
                 ),
@@ -1005,7 +1005,7 @@ class MergeViewModel(
             is MergeIntent.UpdateBorderWidth -> MergeAction.UpdateBorderWidth(dp)
             is MergeIntent.UpdateBorderStyle -> MergeAction.UpdateBorderStyle(style)
             is MergeIntent.UpdateCropShape -> MergeAction.UpdateCropShape(cellIndex, shape)
-            MergeIntent.AddTextLayer -> MergeAction.AddTextLayer
+            is MergeIntent.AddTextLayer -> MergeAction.AddTextLayer(initialText)
             is MergeIntent.UpdateTextLayer -> MergeAction.UpdateTextLayer(layer)
             is MergeIntent.DuplicateTextLayer -> MergeAction.DuplicateTextLayer(layerId)
             is MergeIntent.DeleteTextLayer -> MergeAction.DeleteTextLayer(layerId)

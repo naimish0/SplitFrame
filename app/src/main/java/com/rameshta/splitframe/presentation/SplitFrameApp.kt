@@ -2,12 +2,9 @@ package com.rameshta.splitframe.presentation
 
 import android.Manifest
 import android.app.Activity
-import android.content.ContentResolver
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -28,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.setValue
@@ -51,8 +49,11 @@ import com.rameshta.splitframe.ads.LocalExternalUiLauncher
 import com.rameshta.splitframe.ads.SplitFrameAdManager
 import com.rameshta.splitframe.ads.WorkflowCompletionEvents
 import com.rameshta.splitframe.data.RecentVideoProjectStore
+import com.rameshta.splitframe.data.SampleCollageAssets
 import com.rameshta.splitframe.data.VideoProjectStore
 import com.rameshta.splitframe.domain.ExportResult
+import com.rameshta.splitframe.domain.ImageSource
+import com.rameshta.splitframe.domain.TemplateIds
 import com.rameshta.splitframe.presentation.home.HomeDashboardViewModel
 import com.rameshta.splitframe.presentation.merge.EditorScreen
 import com.rameshta.splitframe.presentation.merge.MergeIntent
@@ -70,6 +71,9 @@ import com.rameshta.splitframe.presentation.video.VideoProjectsScreen
 import com.rameshta.splitframe.ui.components.AdContainer
 import java.util.UUID
 import kotlin.random.Random
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
@@ -82,6 +86,8 @@ internal enum class AppScreen {
     VideoProjects,
     VideoEditor,
     PrivacyPolicy,
+    Settings,
+    Language,
 }
 
 internal data class AppRoute(
@@ -116,6 +122,8 @@ internal fun restoreAppRoute(savedValues: List<String>): AppRoute {
             savedScreen == AppScreen.Editor -> AppScreen.Editor
             savedScreen == AppScreen.SingleImage -> AppScreen.SingleImage
             savedScreen == AppScreen.PrivacyPolicy -> AppScreen.PrivacyPolicy
+            savedScreen == AppScreen.Settings -> AppScreen.Settings
+            savedScreen == AppScreen.Language -> AppScreen.Language
             else -> AppScreen.ModeSelection
         },
         activeVideoProjectId = projectId,
@@ -149,6 +157,8 @@ fun SplitFrameApp(
     recentVideoProjectStore: RecentVideoProjectStore = koinInject(),
     adManager: SplitFrameAdManager = koinInject(),
     adsConfigRepository: AdsConfigRepository = koinInject(),
+    quickEntryAction: String? = null,
+    onQuickEntryConsumed: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val singleImageViewModel = koinViewModel<SingleImageViewModel>()
@@ -167,7 +177,23 @@ fun SplitFrameApp(
         imeVisible = imeVisible,
     )
     val externalUiLauncher = LocalExternalUiLauncher.current
+    val appScope = rememberCoroutineScope()
     var route by rememberSaveable(stateSaver = AppRouteSaver) { mutableStateOf(AppRoute()) }
+    LaunchedEffect(quickEntryAction) {
+        val destination = when (quickEntryAction) {
+            "com.rameshta.splitframe.action.RESIZE" -> AppScreen.SingleImage
+            "com.rameshta.splitframe.action.COLLAGE" -> AppScreen.Templates
+            "com.rameshta.splitframe.action.VIDEO" -> AppScreen.VideoProjects
+            else -> null
+        }
+        if (destination != null) {
+            route = route.copy(
+                screen = destination,
+                photoBackDestination = AppScreen.ModeSelection,
+            )
+            onQuickEntryConsumed()
+        }
+    }
     val screen = route.screen
     var skipNextPhotoExportWorkflowCount by rememberSaveable { mutableStateOf(false) }
     var foregroundPhotoExportActive by remember { mutableStateOf(false) }
@@ -177,7 +203,6 @@ fun SplitFrameApp(
 
     val storagePermissionDeniedMessage = stringResource(R.string.storage_permission_required)
     val videoProjectUnavailableMessage = stringResource(R.string.video_project_unavailable)
-    val recentExportUnavailableMessage = stringResource(R.string.home_recent_export_unavailable)
     var pendingLegacyStorageAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val legacyStoragePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -322,21 +347,18 @@ fun SplitFrameApp(
                             )
                         },
                         onOpenRecentPhotoExport = { savedUri ->
-                            val viewerIntent = context.imageViewerIntent(savedUri)
-                            if (viewerIntent == null) {
-                                Toast.makeText(
-                                    context,
-                                    recentExportUnavailableMessage,
-                                    Toast.LENGTH_LONG,
-                                ).show()
-                            } else {
-                                externalUiLauncher.launch(ExternalUiReason.ExternalViewer) {
-                                    context.startActivity(viewerIntent)
-                                }
-                            }
+                            singleImageViewModel.process(
+                                SingleImageIntent.SelectImage(
+                                    ImageSource.LocalUri(savedUri),
+                                ),
+                            )
+                            route = route.copy(
+                                screen = AppScreen.SingleImage,
+                                photoBackDestination = AppScreen.ModeSelection,
+                            )
                         },
-                        onOpenPrivacyPolicy = {
-                            route = route.copy(screen = AppScreen.PrivacyPolicy)
+                        onOpenSettings = {
+                            route = route.copy(screen = AppScreen.Settings)
                         },
                     )
                 }
@@ -352,6 +374,20 @@ fun SplitFrameApp(
                                 screen = AppScreen.SingleImage,
                                 photoBackDestination = AppScreen.Templates,
                             )
+                        },
+                        onTrySampleCollage = {
+                            appScope.launch {
+                                val sources = withContext(Dispatchers.IO) {
+                                    SampleCollageAssets.ensure(context)
+                                }
+                                if (viewModel.selectTemplateForEditing(TemplateIds.TRIPTYCH_VERTICAL)) {
+                                    viewModel.process(MergeIntent.AssignImages(sources))
+                                    route = route.copy(
+                                        screen = AppScreen.Editor,
+                                        photoBackDestination = AppScreen.Templates,
+                                    )
+                                }
+                            }
                         },
                         onTemplateSelected = { templateId ->
                             if (viewModel.selectTemplateForEditing(templateId)) {
@@ -381,7 +417,10 @@ fun SplitFrameApp(
                     SingleImageScreen(
                         state = singleImageState,
                         onIntent = { intent ->
-                            if (intent == SingleImageIntent.Process) {
+                            if (
+                                intent == SingleImageIntent.Process ||
+                                intent == SingleImageIntent.ProcessBatch
+                            ) {
                                 runWithLegacyStoragePermission { singleImageViewModel.process(intent) }
                             } else {
                                 singleImageViewModel.process(intent)
@@ -521,9 +560,9 @@ fun SplitFrameApp(
                     }
                 }
                 AppScreen.PrivacyPolicy -> {
-                    BackHandler { route = route.copy(screen = AppScreen.ModeSelection) }
+                    BackHandler { route = route.copy(screen = AppScreen.Settings) }
                     PrivacyScreen(
-                        onBack = { route = route.copy(screen = AppScreen.ModeSelection) },
+                        onBack = { route = route.copy(screen = AppScreen.Settings) },
                         showAdPrivacyOptions = privacyOptionsRequired,
                         onManageAdPrivacy = {
                             val activity = context.findActivity() ?: return@PrivacyScreen
@@ -532,6 +571,24 @@ fun SplitFrameApp(
                                 adsConfigRepository.showPrivacyOptions(activity)
                             }
                         },
+                    )
+                }
+                AppScreen.Settings -> {
+                    BackHandler { route = route.copy(screen = AppScreen.ModeSelection) }
+                    SettingsScreen(
+                        onBack = { route = route.copy(screen = AppScreen.ModeSelection) },
+                        onOpenLanguage = {
+                            route = route.copy(screen = AppScreen.Language)
+                        },
+                        onOpenPrivacyPolicy = {
+                            route = route.copy(screen = AppScreen.PrivacyPolicy)
+                        },
+                    )
+                }
+                AppScreen.Language -> {
+                    BackHandler { route = route.copy(screen = AppScreen.Settings) }
+                    LanguageScreen(
+                        onBack = { route = route.copy(screen = AppScreen.Settings) },
                     )
                 }
             }
@@ -544,6 +601,8 @@ fun SplitFrameApp(
             AppScreen.SingleImage -> EmbeddedAdSurface.Resize
             AppScreen.VideoEditor -> EmbeddedAdSurface.VideoEditor
             AppScreen.PrivacyPolicy -> EmbeddedAdSurface.Privacy
+            AppScreen.Settings -> EmbeddedAdSurface.Privacy
+            AppScreen.Language -> EmbeddedAdSurface.Privacy
         }
         if (EmbeddedAdPolicy.shouldShowBanner(embeddedAdSurface, embeddedAdsEligible)) {
             AppBannerAd(modifier = Modifier.navigationBarsPadding())
@@ -581,14 +640,3 @@ private fun Context.findActivity(): Activity? =
         is ContextWrapper -> baseContext.findActivity()
         else -> null
     }
-
-private fun Context.imageViewerIntent(savedUri: String): Intent? {
-    val uri = runCatching { Uri.parse(savedUri) }
-        .getOrNull()
-        ?.takeIf { it.scheme == ContentResolver.SCHEME_CONTENT }
-        ?: return null
-    val intent = Intent(Intent.ACTION_VIEW)
-        .setDataAndType(uri, "image/*")
-        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    return intent.takeIf { it.resolveActivity(packageManager) != null }
-}

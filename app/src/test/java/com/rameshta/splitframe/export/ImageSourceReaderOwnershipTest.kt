@@ -3,7 +3,6 @@ package com.rameshta.splitframe.export
 import com.rameshta.splitframe.domain.ImageDimensions
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ImageSourceReaderOwnershipTest {
@@ -22,12 +21,12 @@ class ImageSourceReaderOwnershipTest {
             transformOwnedResource(
                 owned = source,
                 transform = { throw failure },
-                release = { it.released = true },
+                release = { it.releaseCount += 1 },
             )
         }.exceptionOrNull()
 
         assertSame(failure, thrown)
-        assertTrue(source.released)
+        assertEquals(1, source.releaseCount)
     }
 
     @Test
@@ -38,12 +37,12 @@ class ImageSourceReaderOwnershipTest {
         val result = transformOwnedResource(
             owned = source,
             transform = { oriented },
-            release = { it.released = true },
+            release = { it.releaseCount += 1 },
         )
 
         assertSame(oriented, result)
-        assertTrue(source.released)
-        assertEquals(false, oriented.released)
+        assertEquals(1, source.releaseCount)
+        assertEquals(0, oriented.releaseCount)
     }
 
     @Test
@@ -53,15 +52,59 @@ class ImageSourceReaderOwnershipTest {
         val result = transformOwnedResource(
             owned = source,
             transform = { it },
-            release = { it.released = true },
+            release = { it.releaseCount += 1 },
         )
 
         assertSame(source, result)
-        assertEquals(false, source.released)
+        assertEquals(0, source.releaseCount)
+    }
+
+    @Test
+    fun `transform failure remains primary when owned cleanup also fails`() {
+        val source = Resource("source")
+        val transformFailure = OutOfMemoryError("orientation allocation failed")
+        val cleanupFailure = IllegalStateException("recycle failed")
+
+        val thrown = runCatching {
+            transformOwnedResource(
+                owned = source,
+                transform = { throw transformFailure },
+                release = {
+                    it.releaseCount += 1
+                    throw cleanupFailure
+                },
+            )
+        }.exceptionOrNull()
+
+        assertSame(transformFailure, thrown)
+        assertEquals(1, source.releaseCount)
+        assertEquals(listOf(cleanupFailure), thrown?.suppressed?.toList())
+    }
+
+    @Test
+    fun `failed original release also releases distinct transformed resource`() {
+        val source = Resource("source")
+        val oriented = Resource("oriented")
+        val releaseFailure = IllegalStateException("source recycle failed")
+
+        val thrown = runCatching {
+            transformOwnedResource(
+                owned = source,
+                transform = { oriented },
+                release = { resource ->
+                    resource.releaseCount += 1
+                    if (resource === source) throw releaseFailure
+                },
+            )
+        }.exceptionOrNull()
+
+        assertSame(releaseFailure, thrown)
+        assertEquals(1, source.releaseCount)
+        assertEquals(1, oriented.releaseCount)
     }
 
     private data class Resource(
         val name: String,
-        var released: Boolean = false,
+        var releaseCount: Int = 0,
     )
 }

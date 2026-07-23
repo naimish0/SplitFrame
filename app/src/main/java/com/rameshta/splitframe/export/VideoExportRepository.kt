@@ -4,8 +4,10 @@ import android.content.ContentValues
 import android.content.Context
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.media.MediaCodecList
 import android.net.Uri
 import android.os.Build
+import android.os.StatFs
 import android.os.Handler
 import android.os.HandlerThread
 import android.provider.MediaStore
@@ -15,6 +17,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.Crop
 import androidx.media3.effect.Presentation
+import androidx.media3.effect.RgbMatrix
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
@@ -31,6 +34,7 @@ import com.rameshta.splitframe.domain.RectPx
 import com.rameshta.splitframe.domain.VideoClip
 import com.rameshta.splitframe.domain.VideoLayoutMath
 import com.rameshta.splitframe.domain.VideoMergeProject
+import com.rameshta.splitframe.domain.VideoTransition
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -51,8 +55,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
 @OptIn(UnstableApi::class)
-class VideoExportRepository(
+class VideoExportRepository internal constructor(
     private val context: Context,
+    private val publicationJournal: ExportPublicationJournal,
 ) {
     suspend fun export(
         project: VideoMergeProject,
@@ -65,6 +70,7 @@ class VideoExportRepository(
                 resolution = project.exportResolution,
                 mediaByCell = project.mediaByCell,
             )
+            requireVideoExportCapacity(context, project, outputSize)
             val tempFile = createTempOutputFile(project.id)
             try {
                 val composition = buildComposition(project, outputSize)
@@ -96,23 +102,67 @@ class VideoExportRepository(
             right = outputSize.widthPx.toFloat(),
             bottom = outputSize.heightPx.toFloat(),
         )
-        val sequence = EditedMediaItemSequence.withAudioAndVideoFrom(
-            clips.map { clip -> buildMergedVideoItem(clip, outputFrame) },
+        val videoSequence = EditedMediaItemSequence.withAudioAndVideoFrom(
+            clips.map { clip ->
+                buildMergedVideoItem(
+                    clip = clip,
+                    outputFrame = outputFrame,
+                    removeAudio = project.userAudioUri != null || project.primaryAudioMediaId != clip.id,
+                    transition = project.transition,
+                )
+            },
         )
+        val sequences = buildList {
+            add(videoSequence)
+            project.userAudioUri?.let { audioUri ->
+                val audioItem = EditedMediaItem.Builder(
+                    MediaItem.fromUri(Uri.parse(audioUri)),
+                )
+                    .setRemoveAudio(false)
+                    .setRemoveVideo(true)
+                    .build()
+                add(
+                    EditedMediaItemSequence.withAudioFrom(listOf(audioItem))
+                        .buildUpon()
+                        .setIsLooping(true)
+                        .build(),
+                )
+            }
+        }
 
-        return Composition.Builder(listOf(sequence))
+        return Composition.Builder(sequences)
             .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL)
             .setTransmuxAudio(false)
             .setTransmuxVideo(false)
             .build()
     }
 
-    private fun buildMergedVideoItem(clip: VideoClip, outputFrame: RectPx): EditedMediaItem {
+    private fun buildMergedVideoItem(
+        clip: VideoClip,
+        outputFrame: RectPx,
+        removeAudio: Boolean,
+        transition: VideoTransition,
+    ): EditedMediaItem {
         val media = MediaSource.Video(clip)
         return EditedMediaItem.Builder(clip.mediaItem())
-            .setRemoveAudio(false)
+            .setRemoveAudio(removeAudio)
             .setRemoveVideo(false)
-            .setEffects(Effects(emptyList(), fillFrameEffects(media, outputFrame)))
+            .setEffects(
+                Effects(
+                    emptyList(),
+                    fillFrameEffects(media, outputFrame) +
+                        if (transition == VideoTransition.FadeThroughBlack) {
+                            listOf(
+                                FadeThroughBlackEffect(
+                                    durationUs = clip.trimmedDurationMs * 1_000L,
+                                    fadeDurationUs = FadeDurationUs,
+                                ),
+                            )
+                        } else {
+                            emptyList()
+                        },
+                ),
+            )
             .build()
     }
 
@@ -308,8 +358,11 @@ class VideoExportRepository(
 
         val resolver = context.contentResolver
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val displayName = "SplitFrame_${timestamp}_${UUID.randomUUID().toString().take(8)}.mp4"
+        val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        val journalId = publicationJournal.prepare(collection.toString(), displayName, tempFile)
         val values = ContentValues().apply {
-            put(MediaStore.Video.Media.DISPLAY_NAME, "SplitFrame_$timestamp.mp4")
+            put(MediaStore.Video.Media.DISPLAY_NAME, displayName)
             put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/SplitFrame")
@@ -317,7 +370,8 @@ class VideoExportRepository(
             }
         }
         return transactionalVideoPublication(
-            insert = { resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values) },
+            insert = { resolver.insert(collection, values) },
+            afterInsert = { uri -> publicationJournal.recordWriting(journalId, uri.toString()) },
             write = { uri ->
                 resolver.openOutputStream(uri)?.use { output ->
                     tempFile.inputStream().use { input ->
@@ -331,6 +385,7 @@ class VideoExportRepository(
                 } ?: error("Could not open MediaStore output.")
             },
             beforePublish = ::ensureCurrentExport,
+            onReadyToPublish = { publicationJournal.markReadyToPublish(journalId) },
             publish = { uri ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     val publishValues = ContentValues().apply {
@@ -341,13 +396,19 @@ class VideoExportRepository(
                     }
                 }
             },
+            afterPublish = { publicationJournal.markPublished(journalId) },
             commit = { uri ->
                 commitVideoPublication(
                     ensureActive = processingContext::ensureActive,
                     commit = { onPublished(uri.toString()) },
                 )
+                publicationJournal.remove(journalId)
             },
-            rollback = { uri -> resolver.delete(uri, null, null) > 0 },
+            rollback = { uri ->
+                (resolver.delete(uri, null, null) > 0).also { deleted ->
+                    if (deleted) publicationJournal.remove(journalId)
+                }
+            },
         )
     }
 
@@ -357,7 +418,46 @@ class VideoExportRepository(
         const val ProgressPollMs = 500L
         const val MinVideoMergeClipCount = 2
         const val StaleTempFileAgeMillis = 24L * 60L * 60L * 1_000L
+        const val FadeDurationUs = 250_000L
     }
+}
+
+@OptIn(UnstableApi::class)
+internal class FadeThroughBlackEffect(
+    private val durationUs: Long,
+    private val fadeDurationUs: Long,
+) : RgbMatrix {
+    init {
+        require(durationUs > 0L)
+        require(fadeDurationUs > 0L)
+    }
+
+    override fun getMatrix(presentationTimeUs: Long, useHdr: Boolean): FloatArray {
+        val scale = fadeThroughBlackScale(
+            presentationTimeUs = presentationTimeUs,
+            durationUs = durationUs,
+            fadeDurationUs = fadeDurationUs,
+        )
+        return floatArrayOf(
+            scale, 0f, 0f, 0f,
+            0f, scale, 0f, 0f,
+            0f, 0f, scale, 0f,
+            0f, 0f, 0f, 1f,
+        )
+    }
+}
+
+internal fun fadeThroughBlackScale(
+    presentationTimeUs: Long,
+    durationUs: Long,
+    fadeDurationUs: Long,
+): Float {
+    require(durationUs > 0L && fadeDurationUs > 0L)
+    val safeTime = presentationTimeUs.coerceIn(0L, durationUs)
+    val fade = minOf(fadeDurationUs, durationUs / 2L).coerceAtLeast(1L)
+    val fadeIn = safeTime.toFloat() / fade
+    val fadeOut = (durationUs - safeTime).toFloat() / fade
+    return minOf(fadeIn, fadeOut, 1f).coerceIn(0f, 1f)
 }
 
 internal fun cleanupStaleVideoExportFiles(
@@ -371,6 +471,35 @@ internal fun cleanupStaleVideoExportFiles(
     ?: 0
 
 internal const val VideoEncoderFallbackEnabled = false
+
+internal fun requireVideoExportCapacity(
+    context: Context,
+    project: VideoMergeProject,
+    outputSize: OutputSize,
+) {
+    val supportsAvc = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+        .asSequence()
+        .filter { it.isEncoder }
+        .filter { codec -> codec.supportedTypes.any { it.equals(MimeTypes.VIDEO_H264, ignoreCase = true) } }
+        .any { codec ->
+            runCatching {
+                codec.getCapabilitiesForType(MimeTypes.VIDEO_H264)
+                    .videoCapabilities
+                    ?.isSizeSupported(outputSize.widthPx, outputSize.heightPx) == true
+            }.getOrDefault(false)
+        }
+    check(supportsAvc) {
+        "This device does not support H.264 export at the selected size. Choose a lower resolution."
+    }
+    val estimatedBytes = VideoLayoutMath.estimateMp4Bytes(outputSize, project.orderedClips)
+    val requiredBytes = (estimatedBytes * 2L)
+        .coerceAtLeast(MinVideoExportFreeBytes)
+        .coerceAtMost(Long.MAX_VALUE / 2L)
+    val availableBytes = StatFs(context.cacheDir.absolutePath).availableBytes
+    check(availableBytes >= requiredBytes) {
+        "Not enough storage for this export. Free space or choose a shorter, lower-resolution video."
+    }
+}
 
 @OptIn(UnstableApi::class)
 internal fun videoExportFailureMessage(failure: Throwable): String {
@@ -461,17 +590,23 @@ internal suspend fun commitVideoPublication(
 
 internal suspend fun <Entry : Any> transactionalVideoPublication(
     insert: () -> Entry?,
+    afterInsert: (Entry) -> Unit = {},
     write: (Entry) -> Unit,
     beforePublish: () -> Unit,
+    onReadyToPublish: (Entry) -> Unit = {},
     publish: (Entry) -> Unit,
+    afterPublish: (Entry) -> Unit = {},
     commit: suspend (Entry) -> Unit,
     rollback: (Entry) -> Boolean,
 ): Entry {
     val entry = insert() ?: error("Could not create MediaStore video.")
     return try {
+        afterInsert(entry)
         write(entry)
         beforePublish()
+        onReadyToPublish(entry)
         publish(entry)
+        afterPublish(entry)
         commit(entry)
         entry
     } catch (failure: Throwable) {
@@ -486,3 +621,4 @@ internal suspend fun <Entry : Any> transactionalVideoPublication(
 }
 
 private const val VideoCopyBufferBytes = 64 * 1024
+private const val MinVideoExportFreeBytes = 128L * 1_024L * 1_024L

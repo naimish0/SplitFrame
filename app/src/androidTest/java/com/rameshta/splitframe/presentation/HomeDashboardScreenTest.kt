@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import com.rameshta.splitframe.data.RecentVideoProject
 import com.rameshta.splitframe.data.RecentVideoProjectStatus
 import com.rameshta.splitframe.domain.ExportResolution
+import com.rameshta.splitframe.domain.ImageDimensions
 import com.rameshta.splitframe.domain.TemplateRepository
 import com.rameshta.splitframe.presentation.home.HomeUiState
 import com.rameshta.splitframe.presentation.home.RecentPhotoExport
@@ -115,6 +116,7 @@ class HomeDashboardScreenTest {
                         template = favorite,
                         resolution = ExportResolution.FHD_1080,
                         createdAtMillis = 2L,
+                        dimensions = ImageDimensions(widthPx = 1920, heightPx = 1080),
                     ),
                 ),
                 favoriteLayouts = listOf(favorite),
@@ -132,7 +134,10 @@ class HomeDashboardScreenTest {
             .performClick()
         homeList().performScrollToKey("home-recent-photo-exports")
         composeRule.onNodeWithText("Recent Photo Exports").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Open recent Side by side export at 1080p")
+        composeRule.onNodeWithText("1080p — 1920 × 1080").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(
+            "Open recent Side by side export at 1080p — 1920 × 1080",
+        )
             .assertHasClickAction()
             .performClick()
         homeList().performScrollToKey("home-favorite-layouts")
@@ -172,7 +177,7 @@ class HomeDashboardScreenTest {
                     onOpenVideoProject = onOpenVideoProject,
                     onOpenLayout = onOpenLayout,
                     onOpenRecentPhotoExport = onOpenRecentPhotoExport,
-                    onOpenPrivacyPolicy = {},
+                    onOpenSettings = {},
                 )
             }
         }

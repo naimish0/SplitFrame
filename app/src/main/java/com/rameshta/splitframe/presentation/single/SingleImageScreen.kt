@@ -44,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -57,6 +58,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -73,11 +75,14 @@ import com.rameshta.splitframe.domain.ExportContentMode
 import com.rameshta.splitframe.domain.ExportPresetCatalog
 import com.rameshta.splitframe.domain.ExportPresetDefinition
 import com.rameshta.splitframe.domain.ImageSource
+import com.rameshta.splitframe.domain.ImageMetadataPolicy
 import com.rameshta.splitframe.domain.SingleImageOutputFormat
 import com.rameshta.splitframe.domain.SingleImagePlanResult
 import com.rameshta.splitframe.domain.SingleImageResizePreset
 import com.rameshta.splitframe.domain.SingleImageResizeWarning
+import com.rameshta.splitframe.domain.TargetSizeUnit
 import com.rameshta.splitframe.presentation.coilModel
+import com.rameshta.splitframe.presentation.localizedRuntimeMessage
 import com.rameshta.splitframe.ui.components.PrimaryActionButton
 import com.rameshta.splitframe.ui.components.SecondaryActionButton
 import com.rameshta.splitframe.ui.components.SplitFrameTopAppBar
@@ -111,11 +116,31 @@ fun SingleImageScreen(
             onIntent(SingleImageIntent.SelectImage(ImageSource.LocalUri(uri.toString())))
         }
     }
+    val batchPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(MaxBatchSelection),
+    ) { uris: List<Uri> ->
+        isPickerOpen = false
+        if (uris.isNotEmpty()) {
+            uris.forEach(context::persistUriAccessIfSupported)
+            onIntent(
+                SingleImageIntent.SelectBatchImages(
+                    uris.map { ImageSource.LocalUri(it.toString()) },
+                ),
+            )
+        }
+    }
     fun launchPicker() {
         if (isPickerOpen || state.isProcessing) return
         isPickerOpen = true
         externalUiLauncher.launch(ExternalUiReason.MediaPicker) {
             picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }
+    }
+    fun launchBatchPicker() {
+        if (isPickerOpen || state.isProcessing) return
+        isPickerOpen = true
+        externalUiLauncher.launch(ExternalUiReason.MediaPicker) {
+            batchPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         }
     }
 
@@ -163,12 +188,29 @@ fun SingleImageScreen(
                     )
                 }
             }
+            SecondaryActionButton(
+                text = stringResource(R.string.select_batch_photos),
+                onClick = ::launchBatchPicker,
+                icon = Icons.Default.AddPhotoAlternate,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.isProcessing,
+            )
+            if (state.batchSources.isNotEmpty()) {
+                StatusMessage(
+                    text = stringResource(
+                        R.string.batch_photos_selected,
+                        state.batchSources.size,
+                        MaxBatchSelection,
+                    ),
+                    tone = StatusTone.Info,
+                )
+            }
 
             state.error?.let {
-                StatusMessage(text = it, tone = StatusTone.Error)
+                StatusMessage(text = localizedRuntimeMessage(it), tone = StatusTone.Error)
             }
             state.persistenceWarning?.let {
-                StatusMessage(text = it, tone = StatusTone.Warning)
+                StatusMessage(text = localizedRuntimeMessage(it), tone = StatusTone.Warning)
             }
 
             if (state.source == null) {
@@ -209,10 +251,35 @@ fun SingleImageScreen(
                 }
             }
 
+            state.batchSummary?.let { summary ->
+                StatusMessage(
+                    text = stringResource(
+                        R.string.batch_export_progress,
+                        summary.completed,
+                        summary.total,
+                        summary.total - summary.failures,
+                        summary.failures,
+                    ),
+                    tone = if (summary.failures == 0) StatusTone.Info else StatusTone.Warning,
+                )
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PrimaryActionButton(
-                    text = stringResource(R.string.save),
-                    onClick = { onIntent(SingleImageIntent.Process) },
+                    text = if (state.batchSources.isNotEmpty()) {
+                        stringResource(R.string.export_batch, state.batchSources.size)
+                    } else {
+                        stringResource(R.string.save)
+                    },
+                    onClick = {
+                        onIntent(
+                            if (state.batchSources.isNotEmpty()) {
+                                SingleImageIntent.ProcessBatch
+                            } else {
+                                SingleImageIntent.Process
+                            },
+                        )
+                    },
                     enabled = !state.isProcessing && !state.isPlanning && state.planResult is SingleImagePlanResult.Valid,
                     icon = Icons.Default.Save,
                     modifier = Modifier.weight(1f),
@@ -237,14 +304,14 @@ private fun SingleImagePreview(state: SingleImageState) {
     val source = state.source ?: return
     val plan = (state.planResult as? SingleImagePlanResult.Valid)?.plan
         ?: state.previewPlan?.takeIf { state.isPlanning }
-        ?: return
+    val previewDimensions = plan?.outputDimensions ?: state.sourceDimensions ?: return
     val result = state.result
-    val aspectRatio = plan.canvasAspectRatio
+    val aspectRatio = previewDimensions.widthPx / previewDimensions.heightPx.toFloat()
     val contentModeLabel = state.request.contentMode.label()
     val previewDescription = stringResource(
         R.string.single_image_preview_description,
-        plan.outputDimensions.widthPx,
-        plan.outputDimensions.heightPx,
+        previewDimensions.widthPx,
+        previewDimensions.heightPx,
         contentModeLabel,
     )
     var comparisonPosition by rememberSaveable(result?.savedUri) {
@@ -286,9 +353,13 @@ private fun SingleImagePreview(state: SingleImageState) {
                 AsyncImage(
                     model = source.coilModel(),
                     contentDescription = previewDescription,
-                    contentScale = when (state.request.contentMode) {
-                        ExportContentMode.Fit -> ContentScale.Fit
-                        ExportContentMode.Fill -> ContentScale.Crop
+                    contentScale = if (plan == null) {
+                        ContentScale.Fit
+                    } else {
+                        when (state.request.contentMode) {
+                            ExportContentMode.Fit -> ContentScale.Fit
+                            ExportContentMode.Fill -> ContentScale.Crop
+                        }
                     },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -351,11 +422,13 @@ private fun SingleImageControls(
     onIntent: (SingleImageIntent) -> Unit,
 ) {
     val request = state.request
+    val regionCode = LocalConfiguration.current.locales[0]?.country
+    var presetName by rememberSaveable { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.resize_preset), style = MaterialTheme.typography.labelLarge)
         PresetOptions(
             title = stringResource(R.string.export_presets_social_common),
-            definitions = ExportPresetCatalog.socialAndCommon,
+            definitions = ExportPresetCatalog.socialAndCommonForRegion(regionCode),
             state = state,
             onIntent = onIntent,
         )
@@ -399,6 +472,69 @@ private fun SingleImageControls(
                 )
             }
         }
+        if (request.preset == SingleImageResizePreset.Percentage) {
+            DimensionField(
+                label = stringResource(R.string.resize_percentage),
+                value = request.resizePercent.takeIf { it > 0 },
+                onValueChange = { onIntent(SingleImageIntent.UpdateResizePercent(it)) },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.isProcessing,
+            )
+            Text(
+                stringResource(R.string.resize_percentage_range),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Text(stringResource(R.string.saved_resize_presets), style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = presetName,
+                onValueChange = { presetName = it.take(40) },
+                label = { Text(stringResource(R.string.preset_name)) },
+                singleLine = true,
+                enabled = !state.isProcessing,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = {
+                    onIntent(SingleImageIntent.SaveCurrentPreset(presetName))
+                    if (presetName.isNotBlank()) presetName = ""
+                },
+                enabled = !state.isProcessing && presetName.isNotBlank(),
+            ) {
+                Text(stringResource(R.string.save_preset))
+            }
+        }
+        if (state.savedPresets.isEmpty()) {
+            Text(
+                stringResource(R.string.no_saved_presets),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            state.savedPresets.forEach { preset ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FilterChip(
+                        selected = false,
+                        onClick = { onIntent(SingleImageIntent.ApplySavedPreset(preset.name)) },
+                        label = { Text(preset.name) },
+                        enabled = !state.isProcessing,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(
+                        onClick = { onIntent(SingleImageIntent.DeleteSavedPreset(preset.name)) },
+                        enabled = !state.isProcessing,
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = stringResource(R.string.delete_saved_preset, preset.name),
+                        )
+                    }
+                }
+            }
+        }
 
         Text(stringResource(R.string.content_placement), style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -434,6 +570,32 @@ private fun SingleImageControls(
                 )
             }
         }
+        Text(stringResource(R.string.image_metadata), style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ImageMetadataPolicy.entries.forEach { policy ->
+                FilterChip(
+                    selected = request.metadataPolicy == policy,
+                    onClick = { onIntent(SingleImageIntent.SelectMetadataPolicy(policy)) },
+                    label = {
+                        Text(
+                            stringResource(
+                                if (policy == ImageMetadataPolicy.PreserveDetails) {
+                                    R.string.preserve_image_details
+                                } else {
+                                    R.string.remove_image_metadata
+                                },
+                            ),
+                        )
+                    },
+                    enabled = !state.isProcessing,
+                )
+            }
+        }
+        Text(
+            stringResource(R.string.image_metadata_explanation),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         if (request.outputFormat != SingleImageOutputFormat.Png) {
             val qualityLabel = stringResource(R.string.encoding_quality, request.encodingQuality)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -448,6 +610,29 @@ private fun SingleImageControls(
                         .semantics { contentDescription = qualityLabel },
                 )
             }
+            Text(stringResource(R.string.target_file_size), style = MaterialTheme.typography.labelLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                DimensionField(
+                    label = stringResource(R.string.target_size_value),
+                    value = request.targetSizeValue,
+                    onValueChange = { onIntent(SingleImageIntent.UpdateTargetSizeValue(it)) },
+                    modifier = Modifier.weight(1f),
+                    enabled = !state.isProcessing,
+                )
+                TargetSizeUnit.entries.forEach { unit ->
+                    FilterChip(
+                        selected = request.targetSizeUnit == unit,
+                        onClick = { onIntent(SingleImageIntent.SelectTargetSizeUnit(unit)) },
+                        label = { Text(unit.name) },
+                        enabled = !state.isProcessing,
+                    )
+                }
+            }
+            Text(
+                stringResource(R.string.target_size_explanation),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -593,6 +778,7 @@ private fun SingleImageResizePreset.label(): String =
         SingleImageResizePreset.LongEdge1080 -> stringResource(R.string.preset_1080p)
         SingleImageResizePreset.LongEdge2K -> stringResource(R.string.preset_2k)
         SingleImageResizePreset.LongEdge4K -> stringResource(R.string.preset_4k)
+        SingleImageResizePreset.Percentage -> stringResource(R.string.preset_percentage)
         SingleImageResizePreset.Scale2x -> stringResource(R.string.preset_2x)
         SingleImageResizePreset.Scale4x -> stringResource(R.string.preset_4x)
     }
@@ -608,7 +794,8 @@ private fun ExportPresetDefinition.optionLabel(request: com.rameshta.splitframe.
             null
         }
         is ExportCanvasRule.OriginalLongEdge,
-        is ExportCanvasRule.OriginalScale -> null
+        is ExportCanvasRule.OriginalScale,
+        ExportCanvasRule.OriginalPercentage -> null
     }
     return dimensions?.let {
         stringResource(R.string.preset_with_dimensions, id.label(), it.widthPx, it.heightPx)
@@ -651,6 +838,7 @@ private fun Context.shareImage(savedUri: String) {
 }
 
 internal const val SingleImagePreviewCanvasTag = "single-image-preview-canvas"
+private const val MaxBatchSelection = 20
 
 private fun Context.persistUriAccessIfSupported(uri: Uri) {
     try {

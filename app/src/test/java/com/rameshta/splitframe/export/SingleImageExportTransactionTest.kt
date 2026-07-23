@@ -19,12 +19,16 @@ class SingleImageExportTransactionTest {
         val result = transactionalSingleImageExport<String>(
             insert = { calls += "insert"; Entry },
             write = { calls += "write:$it" },
+            validate = { calls += "validate:$it" },
             publish = { calls += "publish:$it" },
             rollback = { calls += "rollback:$it"; true },
         )
 
         assertEquals(Entry, result)
-        assertEquals(listOf("insert", "write:$Entry", "publish:$Entry"), calls)
+        assertEquals(
+            listOf("insert", "write:$Entry", "validate:$Entry", "publish:$Entry"),
+            calls,
+        )
     }
 
     @Test
@@ -126,6 +130,27 @@ class SingleImageExportTransactionTest {
         }
 
         assertSame(original, failure)
+        assertEquals(Entry, rolledBackEntry)
+    }
+
+    @Test
+    fun validationFailureRollsBackAndSkipsPublish() {
+        val original = IllegalStateException("invalid encoded image")
+        var published = false
+        var rolledBackEntry: String? = null
+
+        val failure = assertThrows(IllegalStateException::class.java) {
+            transactionalSingleImageExport<String>(
+                insert = { Entry },
+                write = {},
+                validate = { throw original },
+                publish = { published = true },
+                rollback = { rolledBackEntry = it; true },
+            )
+        }
+
+        assertSame(original, failure)
+        assertFalse(published)
         assertEquals(Entry, rolledBackEntry)
     }
 

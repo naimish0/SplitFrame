@@ -9,12 +9,14 @@ import com.rameshta.splitframe.data.local.PreferenceEntity
 import com.rameshta.splitframe.data.local.RecentLayoutDao
 import com.rameshta.splitframe.domain.ExportResolution
 import com.rameshta.splitframe.domain.SingleImageExportSettings
+import com.rameshta.splitframe.domain.SavedResizePreset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 private const val LastResolutionKey = "last_export_resolution"
 private const val SingleImageExportSettingsKey = "single_image_export_settings_v1"
 private const val ActivePhotoDraftKey = "active_photo_draft_v1"
+private const val SavedResizePresetsKey = "saved_resize_presets_v1"
 
 class ProjectStore(
     private val preferenceDao: PreferenceDao,
@@ -45,6 +47,22 @@ class ProjectStore(
             PreferenceEntity(
                 key = SingleImageExportSettingsKey,
                 value = SingleImageExportSettingsCodec.encode(settings),
+            ),
+        )
+    }
+
+    suspend fun getSavedResizePresets(): List<SavedResizePreset> =
+        preferenceDao.get(SavedResizePresetsKey)
+            ?.value
+            ?.let(SavedResizePresetsCodec::decode)
+            .orEmpty()
+
+    suspend fun setSavedResizePresets(presets: List<SavedResizePreset>) {
+        require(presets.size <= SavedResizePresetsCodec.MaxPresets)
+        preferenceDao.upsert(
+            PreferenceEntity(
+                key = SavedResizePresetsKey,
+                value = SavedResizePresetsCodec.encode(presets),
             ),
         )
     }

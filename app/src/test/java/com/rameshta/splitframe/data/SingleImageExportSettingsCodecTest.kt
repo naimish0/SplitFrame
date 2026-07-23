@@ -2,9 +2,11 @@ package com.rameshta.splitframe.data
 
 import com.rameshta.splitframe.domain.ExportContentMode
 import com.rameshta.splitframe.domain.ImageDimensions
+import com.rameshta.splitframe.domain.ImageMetadataPolicy
 import com.rameshta.splitframe.domain.SingleImageExportSettings
 import com.rameshta.splitframe.domain.SingleImageOutputFormat
 import com.rameshta.splitframe.domain.SingleImageResizePreset
+import com.rameshta.splitframe.domain.TargetSizeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -16,6 +18,10 @@ class SingleImageExportSettingsCodecTest {
             preset = SingleImageResizePreset.DeviceWallpaper,
             outputFormat = SingleImageOutputFormat.Webp,
             encodingQuality = 88,
+            resizePercent = 65,
+            targetSizeValue = 2,
+            targetSizeUnit = TargetSizeUnit.MB,
+            metadataPolicy = ImageMetadataPolicy.PreserveDetails,
             customWidthPx = 1234,
             customHeightPx = 2345,
             lockAspectRatio = false,
@@ -52,10 +58,35 @@ class SingleImageExportSettingsCodecTest {
 
     @Test
     fun unknownVersionPresetAndInvalidQualityFailClosed() {
-        assertNull(SingleImageExportSettingsCodec.decode("v2|Custom|Jpeg|94|-|-|true|Fit"))
+        assertNull(SingleImageExportSettingsCodec.decode("v4|Custom|Jpeg|94|100|-|KB|-|-|true|Fit|RemoveMetadata"))
         assertNull(SingleImageExportSettingsCodec.decode("v1|Unknown|Jpeg|94|-|-|true|Fit"))
         assertNull(SingleImageExportSettingsCodec.decode("v1|Custom|Jpeg|101|-|-|true|Fit"))
         assertNull(SingleImageExportSettingsCodec.decode("not-a-settings-payload"))
+    }
+
+    @Test
+    fun legacyV1SettingsRemainReadable() {
+        assertEquals(
+            SingleImageExportSettings(
+                preset = SingleImageResizePreset.Custom,
+                outputFormat = SingleImageOutputFormat.Jpeg,
+                encodingQuality = 94,
+                customWidthPx = 1080,
+                lockAspectRatio = true,
+                contentMode = ExportContentMode.Fit,
+            ),
+            SingleImageExportSettingsCodec.decode("v1|Custom|Jpeg|94|1080|-|true|Fit"),
+        )
+    }
+
+    @Test
+    fun previousV2SettingsDefaultToPrivacySafeMetadataRemoval() {
+        assertEquals(
+            ImageMetadataPolicy.RemoveMetadata,
+            SingleImageExportSettingsCodec.decode(
+                "v2|Custom|Jpeg|94|100|-|KB|1080|-|true|Fit",
+            )?.metadataPolicy,
+        )
     }
 
     @Test

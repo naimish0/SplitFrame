@@ -16,6 +16,7 @@ import com.rameshta.splitframe.domain.ExportContentMode
 import com.rameshta.splitframe.domain.ImageDimensions
 import com.rameshta.splitframe.domain.ImageSource
 import com.rameshta.splitframe.domain.MergeProject
+import com.rameshta.splitframe.domain.SingleImagePlanError
 import com.rameshta.splitframe.domain.SingleImagePlanResult
 import com.rameshta.splitframe.domain.SingleImageCanvasMath
 import com.rameshta.splitframe.domain.SingleImageResizePlan
@@ -91,6 +92,11 @@ class SingleImageProcessingReachabilityTest {
             .performScrollTo()
             .assertIsDisplayed()
         composeRule.onNodeWithText("Output format").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Percentage").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Target file size (optional)").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Saved presets").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Select batch photos").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Photo details").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -157,6 +163,32 @@ class SingleImageProcessingReachabilityTest {
             .fetchSemanticsNode()
             .boundsInRoot
         assertEquals(1080f / 1920f, bounds.width / bounds.height, 0.02f)
+    }
+
+    @Test
+    fun invalidOutputPlanStillShowsTheSelectedImagePreview() {
+        composeRule.setContent {
+            SplitFrameTheme {
+                SingleImageScreen(
+                    state = SingleImageState(
+                        source = ImageSource.LocalUri("file:///tmp/splitframe-recent-export.png"),
+                        sourceDimensions = ImageDimensions(3840, 3840),
+                        planResult = SingleImagePlanResult.Invalid(
+                            SingleImagePlanError.OutputTooLarge,
+                        ),
+                        error = "Use dimensions up to 8192 px per edge and 24 megapixels total.",
+                    ),
+                    onIntent = {},
+                    onBack = {},
+                    onUseInCollage = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag(SingleImagePreviewCanvasTag).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "Use dimensions up to 8192 px per edge and 24 megapixels total.",
+        ).assertIsDisplayed()
     }
 
     @Test

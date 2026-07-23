@@ -38,10 +38,10 @@ Status values: **Passed**, **Failed**, **Blocked**, **Manual verification requir
 
 | ID | Scenario | Expected result | Status |
 |---|---|---|---|
-| P0-09 | Fill storage; export collage JPEG, resize JPEG/PNG/WebP, and video MP4 on API 24/28 and 29+. | Actionable failure; no misleading success, zero-byte file, or caught-failure pending/partial row. | Manual verification required |
+| P0-09 | Fill storage; export collage PNG, resize JPEG/PNG/WebP, and video MP4 on API 24/28 and 29+. | Actionable failure; no misleading success, zero-byte file, or caught-failure pending/partial row. | Manual verification required |
 | P0-10 | Cancel during decode/render/compress, Media3 render, MediaStore copy, publish, and work replacement. | UI recovers; owned bitmaps/codecs/streams/temp files release; exact inserted row rolls back. | Manual verification required |
-| P0-11 | Force process death after MediaStore insert/copy/publish. | No pending, partial, orphan, or duplicate output remains. | Failed — durable publication reconciliation is absent |
-| P0-12 | Open every output in Gallery and independent decoder/player. | Correct MIME, dimensions, transparency/background, duration, seekability, and audio. | Manual verification required |
+| P0-11 | Force process death after MediaStore insert/copy/publish. | No pending, partial, orphan, or duplicate output remains. | Implementation complete; controlled process-death verification required |
+| P0-12 | Open every output in Gallery and independent decoder/player. | Correct MIME, dimensions, transparency/background, duration, seekability, and audio. | Partial automation — JPEG/PNG/WebP pending rows reopen with exact MIME/dimensions and bounded decode on API 36; independent viewer, alpha pixels, and MP4 playback remain manual |
 | P0-13 | Export rotated/mixed-resolution/frame-rate/codec/HDR/audio and silent clips at 720p/1080p/4K. | Requested H.264/AAC dimensions or actionable unsupported-encoder/decoder error; no silent fallback. | Manual verification required |
 | P0-14 | Relaunch after intentionally leaving old `video_exports` cache files. | Old SplitFrame MP4 temps are swept; current/unrelated files remain. | Manual verification required |
 | P0-15 | Disable network before launch and complete all three workflows. | Selection, editing, persistence, export, result open/share continue; ad/consent failure is invisible. | Manual verification required |

@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.rameshta.splitframe.data.DeviceWallpaperDimensionsProvider
 import com.rameshta.splitframe.data.ProjectStore
 import com.rameshta.splitframe.domain.ImageDimensions
+import com.rameshta.splitframe.domain.ImageMetadataPolicy
 import com.rameshta.splitframe.domain.ExportContentMode
+import com.rameshta.splitframe.domain.ExportResolution
 import com.rameshta.splitframe.domain.SingleImageExportSettings
 import com.rameshta.splitframe.domain.SingleImagePlanError
 import com.rameshta.splitframe.domain.SingleImageOutputFormat
@@ -14,6 +16,7 @@ import com.rameshta.splitframe.domain.SingleImageOutputMetadata
 import com.rameshta.splitframe.domain.SingleImagePlanResult
 import com.rameshta.splitframe.domain.SingleImageResizePreset
 import com.rameshta.splitframe.domain.SingleImageResizeRequest
+import com.rameshta.splitframe.domain.SavedResizePreset
 import com.rameshta.splitframe.domain.matches
 import com.rameshta.splitframe.export.SingleImageProcessResult
 import com.rameshta.splitframe.export.SingleImageProcessingRepository
@@ -27,6 +30,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 class SingleImageViewModel(
     private val repository: SingleImageProcessingRepository,
@@ -37,8 +41,20 @@ class SingleImageViewModel(
     private val restoredSource = savedStateHandle.get<String>(SourceSavedStateKey)
         ?.takeIf { it.length in 2..MaxSavedUriLength && ':' in it }
         ?.let { com.rameshta.splitframe.domain.ImageSource.LocalUri(it) }
+    private val restoredBatchSources = savedStateHandle.get<ArrayList<String>>(BatchSourcesSavedStateKey)
+        .orEmpty()
+        .take(MaxBatchImages)
+        .mapNotNull { uri ->
+            uri.takeIf { it.length in 2..MaxSavedUriLength && ':' in it }
+                ?.let { com.rameshta.splitframe.domain.ImageSource.LocalUri(it) }
+        }
     private var pendingRestoredResult = restoredResultSnapshot()
-    private val _state = MutableStateFlow(SingleImageState(source = restoredSource))
+    private val _state = MutableStateFlow(
+        SingleImageState(
+            source = restoredSource ?: restoredBatchSources.firstOrNull(),
+            batchSources = restoredBatchSources,
+        ),
+    )
     val state: StateFlow<SingleImageState> = _state.asStateFlow()
     private var processJob: Job? = null
     private var planJob: Job? = null
@@ -52,8 +68,9 @@ class SingleImageViewModel(
 
     init {
         restoreExportSettings()
+        loadSavedPresets()
         loadWallpaperDimensions()
-        if (restoredSource != null) refreshPlan()
+        if (_state.value.source != null) refreshPlan()
     }
 
     fun process(intent: SingleImageIntent) {
@@ -62,10 +79,14 @@ class SingleImageViewModel(
             is SingleImageIntent.SelectImage -> {
                 planJob?.cancel()
                 savedStateHandle[SourceSavedStateKey] = intent.source.uri
+                savedStateHandle.remove<ArrayList<String>>(BatchSourcesSavedStateKey)
                 clearSavedResult()
                 _state.update {
                     it.copy(
                         source = intent.source,
+                        sourceDimensions = null,
+                        batchSources = emptyList(),
+                        batchSummary = null,
                         planResult = null,
                         previewPlan = null,
                         isPlanning = true,
@@ -75,11 +96,27 @@ class SingleImageViewModel(
                 }
                 refreshPlan()
             }
+            is SingleImageIntent.SelectBatchImages -> selectBatchImages(intent.sources)
             is SingleImageIntent.SelectPreset -> updateRequest { it.copy(preset = intent.preset) }
             is SingleImageIntent.SelectOutputFormat -> updateRequest { it.copy(outputFormat = intent.format) }
             is SingleImageIntent.UpdateEncodingQuality -> updateRequest(debouncePersistence = true) {
                 it.copy(encodingQuality = intent.quality.coerceIn(60, 100))
             }
+            is SingleImageIntent.UpdateResizePercent -> updateRequest(debouncePersistence = true) {
+                it.copy(resizePercent = intent.percent ?: 0)
+            }
+            is SingleImageIntent.UpdateTargetSizeValue -> updateRequest(debouncePersistence = true) {
+                it.copy(targetSizeValue = intent.value)
+            }
+            is SingleImageIntent.SelectTargetSizeUnit -> updateRequest {
+                it.copy(targetSizeUnit = intent.unit)
+            }
+            is SingleImageIntent.SelectMetadataPolicy -> updateRequest {
+                it.copy(metadataPolicy = intent.policy)
+            }
+            is SingleImageIntent.SaveCurrentPreset -> saveCurrentPreset(intent.name)
+            is SingleImageIntent.ApplySavedPreset -> applySavedPreset(intent.name)
+            is SingleImageIntent.DeleteSavedPreset -> deleteSavedPreset(intent.name)
             is SingleImageIntent.UpdateCustomWidth -> updateRequest(debouncePersistence = true) {
                 it.copy(
                     customWidthPx = intent.widthPx,
@@ -100,11 +137,96 @@ class SingleImageViewModel(
             }
             is SingleImageIntent.SelectContentMode -> updateRequest { it.copy(contentMode = intent.contentMode) }
             SingleImageIntent.Process -> processImage()
+            SingleImageIntent.ProcessBatch -> processBatch()
             SingleImageIntent.Cancel -> cancelProcessing()
             SingleImageIntent.ClearError -> _state.update { it.copy(error = null) }
             SingleImageIntent.ClearResult -> {
                 clearSavedResult()
                 _state.update { it.copy(result = null) }
+            }
+        }
+    }
+
+    private fun selectBatchImages(sources: List<com.rameshta.splitframe.domain.ImageSource.LocalUri>) {
+        val selected = sources.distinctBy { it.uri }.take(MaxBatchImages)
+        if (selected.isEmpty()) return
+        planJob?.cancel()
+        val first = selected.first()
+        savedStateHandle[SourceSavedStateKey] = first.uri
+        savedStateHandle[BatchSourcesSavedStateKey] = ArrayList(selected.map { it.uri })
+        clearSavedResult()
+        _state.update {
+            it.copy(
+                source = first,
+                sourceDimensions = null,
+                batchSources = selected,
+                batchSummary = null,
+                planResult = null,
+                previewPlan = null,
+                isPlanning = true,
+                result = null,
+                error = null,
+            )
+        }
+        refreshPlan()
+    }
+
+    private fun loadSavedPresets() {
+        viewModelScope.launch {
+            val presets = try {
+                withContext(Dispatchers.IO) { projectStore.getSavedResizePresets() }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Throwable) {
+                _state.update { it.copy(persistenceWarning = "Saved presets could not be loaded.") }
+                return@launch
+            }
+            _state.update { it.copy(savedPresets = presets) }
+        }
+    }
+
+    private fun saveCurrentPreset(rawName: String) {
+        val name = rawName.trim()
+        if (name.length !in 1..40) {
+            _state.update { it.copy(error = "Preset names must contain 1 to 40 characters.") }
+            return
+        }
+        val current = _state.value
+        val updated = (
+            current.savedPresets.filterNot { it.name.equals(name, ignoreCase = true) } +
+                SavedResizePreset(name, SingleImageExportSettings.from(current.request))
+            ).takeLast(12)
+        persistSavedPresets(updated)
+    }
+
+    private fun applySavedPreset(name: String) {
+        val saved = _state.value.savedPresets.firstOrNull { it.name == name } ?: return
+        requestRevision += 1L
+        clearSavedResult()
+        _state.update { current ->
+            current.copy(
+                request = saved.settings.toRequest(current.request.deviceWallpaperDimensions),
+                result = null,
+                error = null,
+            )
+        }
+        persistExportSettings(_state.value.request, debouncePersistence = false)
+        refreshPlan()
+    }
+
+    private fun deleteSavedPreset(name: String) {
+        persistSavedPresets(_state.value.savedPresets.filterNot { it.name == name })
+    }
+
+    private fun persistSavedPresets(presets: List<SavedResizePreset>) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { projectStore.setSavedResizePresets(presets) }
+                _state.update { it.copy(savedPresets = presets, persistenceWarning = null) }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Throwable) {
+                _state.update { it.copy(persistenceWarning = "Saved presets could not be updated.") }
             }
         }
     }
@@ -149,9 +271,13 @@ class SingleImageViewModel(
             try {
                 val restoredAtInspection = pendingRestoredResult
                 val inspection = withContext(Dispatchers.IO) {
-                    val plan = repository.plan(source, request)
+                    val sourceDimensions = repository.dimensions(source)
+                    val plan = sourceDimensions?.let { dimensions ->
+                        com.rameshta.splitframe.domain.SingleImageResizePlanner.plan(dimensions, request)
+                    } ?: SingleImagePlanResult.Invalid(SingleImagePlanError.InvalidDimensions)
                     PlanInspection(
                         plan = plan,
+                        sourceDimensions = sourceDimensions,
                         restoredOutputReadable = restoredAtInspection?.let { restored ->
                             repository.isReadable(
                                 com.rameshta.splitframe.domain.ImageSource.LocalUri(restored.savedUri),
@@ -171,6 +297,7 @@ class SingleImageViewModel(
                     ) {
                         current.copy(
                             planResult = plan,
+                            sourceDimensions = inspection.sourceDimensions,
                             previewPlan = (plan as? SingleImagePlanResult.Valid)?.plan ?: current.previewPlan,
                             isPlanning = false,
                             result = current.result ?: if (inspection.restoredOutputReadable == false) {
@@ -343,6 +470,15 @@ class SingleImageViewModel(
                         }
                     }
                 }
+                if (
+                    result is SingleImageProcessResult.Success &&
+                    processGeneration == generation &&
+                    _state.value.source == source &&
+                    _state.value.request == request
+                ) {
+                    persistResult(result)
+                    recordResizeExport(result)
+                }
                 _state.update { state ->
                     if (
                         processGeneration != generation ||
@@ -353,7 +489,6 @@ class SingleImageViewModel(
                     } else {
                         when (result) {
                             is SingleImageProcessResult.Success -> {
-                                persistResult(result)
                                 state.copy(
                                     isProcessing = false,
                                     isCancelling = false,
@@ -402,6 +537,137 @@ class SingleImageViewModel(
                     processJob = null
                     applyResolvedWallpaperDimensions()
                 }
+            }
+        }
+    }
+
+    private fun processBatch() {
+        val sources = _state.value.batchSources.take(MaxBatchImages)
+        if (sources.isEmpty()) {
+            _state.update { it.copy(error = "Select photos for the batch first.") }
+            return
+        }
+        if (_state.value.isProcessing || processJob?.isActive == true) return
+        val request = _state.value.request
+        _state.update {
+            it.copy(
+                isProcessing = true,
+                isCancelling = false,
+                progress = 0f,
+                result = null,
+                batchSummary = null,
+                error = null,
+            )
+        }
+        processGeneration += 1L
+        val generation = processGeneration
+        processJob = viewModelScope.launch {
+            val savedUris = mutableListOf<String>()
+            var failures = 0
+            var lastSuccess: SingleImageProcessResult.Success? = null
+            try {
+                sources.forEachIndexed { index, source ->
+                    val result = withContext(Dispatchers.Default) {
+                        repository.process(source, request) { itemProgress ->
+                            val overall = (index + itemProgress.coerceIn(0f, 1f)) / sources.size
+                            _state.update { current ->
+                                if (processGeneration == generation && current.isProcessing) {
+                                    current.copy(progress = overall)
+                                } else {
+                                    current
+                                }
+                            }
+                        }
+                    }
+                    when (result) {
+                        is SingleImageProcessResult.Success -> {
+                            savedUris += result.savedUri
+                            lastSuccess = result
+                            recordResizeExport(result)
+                        }
+                        is SingleImageProcessResult.Failure -> failures += 1
+                    }
+                    _state.update { current ->
+                        if (processGeneration == generation && current.isProcessing) {
+                            current.copy(
+                                progress = (index + 1f) / sources.size,
+                                batchSummary = BatchExportSummary(
+                                    completed = index + 1,
+                                    total = sources.size,
+                                    failures = failures,
+                                    savedUris = savedUris.toList(),
+                                ),
+                            )
+                        } else {
+                            current
+                        }
+                    }
+                }
+                lastSuccess?.let(::persistResult)
+                _state.update { current ->
+                    if (processGeneration == generation) {
+                        current.copy(
+                            isProcessing = false,
+                            isCancelling = false,
+                            progress = 1f,
+                            result = lastSuccess,
+                            error = when {
+                                failures == sources.size -> "No images were exported. Check the selected files and settings."
+                                failures > 0 -> "$failures of ${sources.size} images could not be exported."
+                                else -> null
+                            },
+                        )
+                    } else {
+                        current
+                    }
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (throwable: Throwable) {
+                _state.update { current ->
+                    if (processGeneration == generation) {
+                        current.copy(error = throwable.message ?: "Batch export failed.")
+                    } else {
+                        current
+                    }
+                }
+            } finally {
+                if (processGeneration == generation) {
+                    _state.update { current ->
+                        if (current.isProcessing) {
+                            val wasCancelling = current.isCancelling
+                            current.copy(
+                                isProcessing = false,
+                                isCancelling = false,
+                                error = if (wasCancelling) "Batch export cancelled." else current.error,
+                            )
+                        } else {
+                            current
+                        }
+                    }
+                    processJob = null
+                    applyResolvedWallpaperDimensions()
+                }
+            }
+        }
+    }
+
+    private suspend fun recordResizeExport(result: SingleImageProcessResult.Success) {
+        try {
+            withContext(Dispatchers.IO) {
+                projectStore.addExportHistory(
+                    id = UUID.randomUUID().toString(),
+                    templateId = ResizeHistoryTemplateId,
+                    savedUri = result.savedUri,
+                    resolution = ExportResolution.ORIGINAL,
+                    createdAtMillis = System.currentTimeMillis(),
+                )
+            }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+            _state.update {
+                it.copy(persistenceWarning = "Image saved, but recent export history could not be updated.")
             }
         }
     }
@@ -456,6 +722,9 @@ class SingleImageViewModel(
                 outputFormat = format,
                 encodingQuality = savedStateHandle.get<Int>(ResultQualityKey)?.takeIf { it >= 0 },
                 contentMode = contentMode,
+                metadataPolicy = savedStateHandle.get<String>(ResultMetadataPolicyKey)
+                    ?.let { name -> ImageMetadataPolicy.entries.firstOrNull { it.name == name } }
+                    ?: ImageMetadataPolicy.RemoveMetadata,
             ),
         )
     }
@@ -485,6 +754,7 @@ class SingleImageViewModel(
         savedStateHandle[ResultFormatKey] = result.metadata.outputFormat.name
         savedStateHandle[ResultQualityKey] = result.metadata.encodingQuality ?: -1
         savedStateHandle[ResultContentModeKey] = result.metadata.contentMode.name
+        savedStateHandle[ResultMetadataPolicyKey] = result.metadata.metadataPolicy.name
     }
 
     private fun clearSavedResult() {
@@ -500,6 +770,7 @@ class SingleImageViewModel(
             ResultFormatKey,
             ResultQualityKey,
             ResultContentModeKey,
+            ResultMetadataPolicyKey,
         ).forEach { key -> savedStateHandle.remove<Any?>(key) }
     }
 
@@ -510,13 +781,17 @@ class SingleImageViewModel(
 
     private data class PlanInspection(
         val plan: SingleImagePlanResult,
+        val sourceDimensions: ImageDimensions?,
         val restoredOutputReadable: Boolean?,
     )
 
     private companion object {
         const val SettingsSaveDebounceMillis = 150L
         const val MaxSavedUriLength = 4_096
+        const val MaxBatchImages = 20
+        const val ResizeHistoryTemplateId = "single_image_resize"
         const val SourceSavedStateKey = "single_image_source_v1"
+        const val BatchSourcesSavedStateKey = "single_image_batch_sources_v1"
         const val ResultUriSavedStateKey = "single_image_result_uri_v1"
         const val ResultOriginalWidthKey = "single_image_result_original_width_v1"
         const val ResultOriginalHeightKey = "single_image_result_original_height_v1"
@@ -527,5 +802,6 @@ class SingleImageViewModel(
         const val ResultFormatKey = "single_image_result_format_v1"
         const val ResultQualityKey = "single_image_result_quality_v1"
         const val ResultContentModeKey = "single_image_result_content_mode_v1"
+        const val ResultMetadataPolicyKey = "single_image_result_metadata_policy_v1"
     }
 }

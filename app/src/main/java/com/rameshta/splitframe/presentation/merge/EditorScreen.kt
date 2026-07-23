@@ -937,11 +937,12 @@ private fun TextTool(
         }
     }
     val selectedLayer = layers.firstOrNull { it.id == selectedLayerId }
+    val initialText = stringResource(R.string.text_tool)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(R.string.text_tool), style = MaterialTheme.typography.labelLarge)
         SecondaryActionButton(
             text = stringResource(R.string.add_text),
-            onClick = { onIntent(MergeIntent.AddTextLayer) },
+            onClick = { onIntent(MergeIntent.AddTextLayer(initialText)) },
             icon = Icons.Default.Add,
             modifier = Modifier.fillMaxWidth(),
         )
