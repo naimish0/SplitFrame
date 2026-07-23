@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.rameshta.splitframe.R
@@ -20,37 +21,61 @@ import com.rameshta.splitframe.domain.VideoClip
 import com.rameshta.splitframe.domain.VideoFitMode
 import com.rameshta.splitframe.domain.VideoLayoutMath
 import com.rameshta.splitframe.domain.VideoMergeProject
+import com.rameshta.splitframe.domain.TransformUndoSession
 import com.rameshta.splitframe.domain.withFitMode
 import com.rameshta.splitframe.domain.withTransform
 import com.rameshta.splitframe.export.MediaMetadataFailure
 import com.rameshta.splitframe.export.MixedMediaMetadataReader
 import com.rameshta.splitframe.export.MixedMediaMetadataResult
 import com.rameshta.splitframe.export.VideoExportWorker
+import com.rameshta.splitframe.export.isLiveVideoExportState
+import com.rameshta.splitframe.export.videoExportRecoveryDelayMillis
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+
+data class VideoProjectSessionArgs(
+    val projectId: String,
+    val createIfMissing: Boolean,
+)
 
 class VideoMergeViewModel(
     private val videoProjectStore: VideoProjectStore,
     private val mixedMediaMetadataReader: MixedMediaMetadataReader,
     private val workManager: WorkManager,
+    private val sessionArgs: VideoProjectSessionArgs,
 ) : ViewModel() {
     private val undoStack = ArrayDeque<VideoMergeProject>()
     private val redoStack = ArrayDeque<VideoMergeProject>()
     private var metadataJob: Job? = null
     private var exportObserveJob: Job? = null
+    private var exportEnqueueJob: Job? = null
+    private var transformUndoExpiryJob: Job? = null
+    private val transformUndoSession = TransformUndoSession()
+    private val persistenceMutex = Mutex()
     private val _state = MutableStateFlow(VideoMergeState())
     val state: StateFlow<VideoMergeState> = _state.asStateFlow()
 
     init {
         viewModelScope.launch {
-            val project = videoProjectStore.getOrCreate(null).asVideoMergeProject()
+            val openedProject = videoProjectStore.openProject(
+                projectId = sessionArgs.projectId,
+                createIfMissing = sessionArgs.createIfMissing,
+            )
+            if (openedProject == null) {
+                _state.update { it.copy(status = VideoEditorStatus.ProjectUnavailable) }
+                return@launch
+            }
+            val project = openedProject.asVideoMergeProject()
             _state.update {
                 it.copy(
                     project = project,
@@ -58,8 +83,8 @@ class VideoMergeViewModel(
                     status = VideoEditorStatus.Initial,
                 )
             }
-            videoProjectStore.save(project)
             observeExportWork(project.id)
+            reconcileRestoredExportWork(project.id)
         }
     }
 
@@ -96,7 +121,7 @@ class VideoMergeViewModel(
             is VideoMergeAction.SelectDurationMode -> updateProject { it.copy(durationMode = action.mode) }
             is VideoMergeAction.SelectExportResolution -> updateProject { it.copy(exportResolution = action.resolution) }
             is VideoMergeAction.SelectFitMode -> updateMedia(action.cellIndex) { it.withFitMode(action.fitMode) }
-            VideoMergeAction.Play -> reduce(VideoMergeResultEvent.Playing)
+            VideoMergeAction.Play -> playPreview()
             VideoMergeAction.Pause -> reduce(VideoMergeResultEvent.Paused)
             is VideoMergeAction.SeekTo -> reduce(VideoMergeResultEvent.Seeked(action.positionMs))
             VideoMergeAction.RetryPreview -> reduce(VideoMergeResultEvent.PreviewPreparing)
@@ -233,8 +258,13 @@ class VideoMergeViewModel(
             spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
         )
         reduce(VideoMergeResultEvent.SelectedClipChanged(safeCell))
-        viewModelScope.launch { videoProjectStore.save(updated) }
+        persist(updated)
         _state.update { it.copy(project = updated) }
+        val orderedClipIndex = project.orderedVideoCellIndexes().indexOf(safeCell)
+        VideoLayoutMath.mergedVideoClipStartMs(project.orderedClips, orderedClipIndex)?.let { startMs ->
+            if (!_state.value.isExporting) reduce(VideoMergeResultEvent.Paused)
+            reduce(VideoMergeResultEvent.Seeked(startMs))
+        }
     }
 
     private fun swapCells(firstCellIndex: Int, secondCellIndex: Int) {
@@ -268,11 +298,29 @@ class VideoMergeViewModel(
             val (start, end) = VideoLayoutMath.normalizeTrim(clip.durationMs, startMs, endMs)
             clip.copy(trimStartMs = start, trimEndMs = end)
         }
-        reduce(VideoMergeResultEvent.Seeked(startMs))
+        val updatedProject = _state.value.project ?: return
+        val orderedClipIndex = updatedProject.orderedVideoCellIndexes().indexOf(cellIndex)
+        VideoLayoutMath.mergedVideoClipStartMs(updatedProject.orderedClips, orderedClipIndex)?.let { clipStartMs ->
+            if (!_state.value.isExporting) reduce(VideoMergeResultEvent.Paused)
+            reduce(VideoMergeResultEvent.Seeked(clipStartMs))
+        }
     }
 
     private fun updateTransform(cellIndex: Int, transform: ImageTransform, trackUndo: Boolean) {
-        updateMedia(cellIndex, trackUndo) { it.withTransform(transform) }
+        val shouldTrackUndo = transformUndoSession.onTransform(
+            cellIndex = cellIndex,
+            gestureFinished = trackUndo,
+        )
+        transformUndoExpiryJob?.cancel()
+        transformUndoExpiryJob = if (trackUndo) {
+            null
+        } else {
+            viewModelScope.launch {
+                delay(TransformGestureIdleMillis)
+                transformUndoSession.expire(cellIndex)
+            }
+        }
+        updateMedia(cellIndex, shouldTrackUndo) { it.withTransform(transform) }
     }
 
     private fun updateVideoClip(
@@ -313,9 +361,7 @@ class VideoMergeViewModel(
             redoStack.clear()
         }
         reduce(VideoMergeResultEvent.ProjectChanged(edgeToEdgeProject))
-        viewModelScope.launch {
-            videoProjectStore.save(edgeToEdgeProject)
-        }
+        persist(edgeToEdgeProject)
     }
 
     private fun undoEdit() {
@@ -323,7 +369,7 @@ class VideoMergeViewModel(
         val previous = undoStack.removeLastOrNull()?.copy(spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp) ?: return
         redoStack.addLast(current.copy(spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp))
         reduce(VideoMergeResultEvent.ProjectChanged(previous))
-        viewModelScope.launch { videoProjectStore.save(previous) }
+        persist(previous)
     }
 
     private fun redoEdit() {
@@ -331,7 +377,7 @@ class VideoMergeViewModel(
         val next = redoStack.removeLastOrNull()?.copy(spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp) ?: return
         undoStack.addLast(current.copy(spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp))
         reduce(VideoMergeResultEvent.ProjectChanged(next))
-        viewModelScope.launch { videoProjectStore.save(next) }
+        persist(next)
     }
 
     private fun resetProject() {
@@ -340,12 +386,26 @@ class VideoMergeViewModel(
         undoStack.clear()
         redoStack.clear()
         reduce(VideoMergeResultEvent.ProjectChanged(reset))
-        viewModelScope.launch { videoProjectStore.reset(current.id) }
+        viewModelScope.launch {
+            persistenceMutex.withLock { videoProjectStore.reset(current.id) }
+        }
+    }
+
+    private fun playPreview() {
+        val state = _state.value
+        val project = state.project ?: return
+        if (state.isExporting) return
+        val durationMs = VideoLayoutMath.outputDurationForMergedVideos(project.orderedClips)
+        if (durationMs <= 0L) return
+        if (state.playbackPositionMs >= durationMs) {
+            reduce(VideoMergeResultEvent.Seeked(0L))
+        }
+        reduce(VideoMergeResultEvent.Playing)
     }
 
     private fun startExport() {
         val project = _state.value.project ?: return
-        if (_state.value.isExporting) return
+        if (_state.value.isExporting || exportEnqueueJob?.isActive == true) return
         if (!project.isComplete) {
             reduce(VideoMergeResultEvent.Failed(R.string.video_missing_clips))
             return
@@ -354,64 +414,151 @@ class VideoMergeViewModel(
             reduce(VideoMergeResultEvent.Failed(R.string.video_invalid_trim))
             return
         }
-        viewModelScope.launch {
-            videoProjectStore.save(project.withAvailableAudio())
-            val workName = VideoExportWorker.uniqueWorkName(project.id)
-            val request = OneTimeWorkRequestBuilder<VideoExportWorker>()
-                .setId(UUID.randomUUID())
-                .setInputData(workDataOf(VideoExportWorker.ProjectIdKey to project.id))
-                .build()
-            videoProjectStore.setExportWork(
-                VideoExportWorkEntity(
-                    projectId = project.id,
-                    workId = request.id.toString(),
-                    state = VideoExportWorker.StateQueued,
-                    progress = 0f,
-                    outputUri = null,
-                    errorMessage = null,
-                    updatedAtMillis = System.currentTimeMillis(),
-                ),
-            )
-            workManager.enqueueUniqueWork(workName, ExistingWorkPolicy.REPLACE, request)
-            reduce(VideoMergeResultEvent.ExportQueued(request.id.toString()))
+        val enqueueJob = viewModelScope.launch {
+            var queuedWorkId: String? = null
+            try {
+                persistenceMutex.withLock { videoProjectStore.save(project.withAvailableAudio()) }
+                val workName = VideoExportWorker.uniqueWorkName(project.id)
+                val request = OneTimeWorkRequestBuilder<VideoExportWorker>()
+                    .setId(UUID.randomUUID())
+                    .setInputData(workDataOf(VideoExportWorker.ProjectIdKey to project.id))
+                    .build()
+                queuedWorkId = request.id.toString()
+                videoProjectStore.setExportWork(
+                    VideoExportWorkEntity(
+                        projectId = project.id,
+                        workId = queuedWorkId,
+                        state = VideoExportWorker.StateQueued,
+                        progress = 0f,
+                        outputUri = null,
+                        errorMessage = null,
+                        updatedAtMillis = System.currentTimeMillis(),
+                    ),
+                )
+                val operation = workManager.enqueueUniqueWork(
+                    workName,
+                    ExistingWorkPolicy.REPLACE,
+                    request,
+                )
+                withContext(Dispatchers.IO) { operation.result.get() }
+                reduce(VideoMergeResultEvent.ExportQueued(queuedWorkId))
+            } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                throw cancellation
+            } catch (_: Throwable) {
+                queuedWorkId?.let { workId ->
+                    videoProjectStore.updateExportWorkIfCurrent(
+                        VideoExportWorkEntity(
+                            projectId = project.id,
+                            workId = workId,
+                            state = VideoExportWorker.StateFailed,
+                            progress = 0f,
+                            outputUri = null,
+                            errorMessage = ExportSchedulingFailure,
+                            updatedAtMillis = System.currentTimeMillis(),
+                        ),
+                        expectedStates = listOf(VideoExportWorker.StateQueued),
+                    )
+                }
+                reduce(VideoMergeResultEvent.Failed(R.string.video_export_queue_failed))
+            }
+        }
+        exportEnqueueJob = enqueueJob
+        enqueueJob.invokeOnCompletion {
+            if (exportEnqueueJob === enqueueJob) exportEnqueueJob = null
         }
     }
 
     private fun cancelExport() {
         val project = _state.value.project ?: return
-        workManager.cancelUniqueWork(VideoExportWorker.uniqueWorkName(project.id))
+        val workId = _state.value.exportWorkId ?: return
+        val workUuid = runCatching { UUID.fromString(workId) }.getOrNull() ?: return
         viewModelScope.launch {
-            videoProjectStore.setExportWork(
+            val cancelled = videoProjectStore.updateExportWorkIfCurrent(
                 VideoExportWorkEntity(
                     projectId = project.id,
-                    workId = _state.value.exportWorkId,
+                    workId = workId,
                     state = VideoExportWorker.StateCancelled,
                     progress = _state.value.exportProgress,
                     outputUri = null,
                     errorMessage = null,
                     updatedAtMillis = System.currentTimeMillis(),
                 ),
+                expectedStates = listOf(VideoExportWorker.StateQueued, VideoExportWorker.StateRunning),
             )
+            if (cancelled) {
+                workManager.cancelWorkById(workUuid)
+                reduce(VideoMergeResultEvent.ExportCancelled(workId))
+            }
         }
-        reduce(VideoMergeResultEvent.ExportCancelled)
     }
 
     private fun observeExportWork(projectId: String) {
         exportObserveJob?.cancel()
         exportObserveJob = viewModelScope.launch {
             videoProjectStore.observeExportWork(projectId).collect { work ->
-                when (work?.state) {
-                    VideoExportWorker.StateQueued -> reduce(VideoMergeResultEvent.ExportQueued(work.workId))
-                    VideoExportWorker.StateRunning -> reduce(VideoMergeResultEvent.ExportProgressChanged(work.progress))
-                    VideoExportWorker.StateSucceeded -> reduce(VideoMergeResultEvent.ExportFinished(ExportResult.Success(work.outputUri.orEmpty())))
-                    VideoExportWorker.StateFailed -> reduce(
-                        VideoMergeResultEvent.ExportFinished(
-                            ExportResult.Failure(work.errorMessage ?: "Video export failed."),
-                        ),
-                    )
-                    VideoExportWorker.StateCancelled -> reduce(VideoMergeResultEvent.ExportCancelled)
-                }
+                work?.toVideoMergeResultEvent()?.let(::reduce)
             }
+        }
+    }
+
+    private suspend fun reconcileRestoredExportWork(projectId: String) {
+        var stored = videoProjectStore.getExportWork(projectId) ?: return
+        if (stored.state !in listOf(VideoExportWorker.StateQueued, VideoExportWorker.StateRunning)) return
+        val recoveryDelay = videoExportRecoveryDelayMillis(
+            updatedAtMillis = stored.updatedAtMillis,
+            nowMillis = System.currentTimeMillis(),
+            graceMillis = ExportRecoveryGraceMillis,
+        )
+        if (recoveryDelay > 0L) {
+            delay(recoveryDelay)
+            val latest = videoProjectStore.getExportWork(projectId) ?: return
+            if (
+                latest.workId != stored.workId ||
+                latest.state !in listOf(VideoExportWorker.StateQueued, VideoExportWorker.StateRunning)
+            ) {
+                return
+            }
+            stored = latest
+        }
+        val workId = stored.workId ?: return
+        val uuid = runCatching { UUID.fromString(workId) }.getOrNull()
+        val workInfo = if (uuid == null) {
+            null
+        } else {
+            try {
+                withContext(Dispatchers.IO) { workManager.getWorkInfoById(uuid).get() }
+            } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                throw cancellation
+            } catch (_: Throwable) {
+                // A transient WorkManager lookup failure must not invalidate durable state.
+                return
+            }
+        }
+        if (workInfo?.state.isLiveVideoExportState()) return
+        val recoveredState = if (workInfo?.state == WorkInfo.State.CANCELLED) {
+            VideoExportWorker.StateCancelled
+        } else {
+            VideoExportWorker.StateFailed
+        }
+        videoProjectStore.updateExportWorkIfCurrent(
+            stored.copy(
+                state = recoveredState,
+                progress = 0f,
+                outputUri = null,
+                errorMessage = if (recoveredState == VideoExportWorker.StateFailed) {
+                    ExportRecoveryFailure
+                } else {
+                    null
+                },
+                updatedAtMillis = System.currentTimeMillis(),
+            ),
+            expectedStates = listOf(VideoExportWorker.StateQueued, VideoExportWorker.StateRunning),
+        )
+    }
+
+    private fun persist(project: VideoMergeProject) {
+        viewModelScope.launch {
+            persistenceMutex.withLock { videoProjectStore.save(project) }
         }
     }
 
@@ -421,6 +568,10 @@ class VideoMergeViewModel(
                 is VideoMergeResultEvent.ProjectChanged -> state.copy(
                     project = result.project,
                     selectedClipIndex = result.project.selectedCellIndex ?: state.selectedClipIndex,
+                    playbackPositionMs = state.playbackPositionMs.coerceIn(
+                        0L,
+                        VideoLayoutMath.outputDurationForMergedVideos(result.project.orderedClips),
+                    ),
                     error = null,
                     canUndo = undoStack.isNotEmpty(),
                     canRedo = redoStack.isNotEmpty(),
@@ -433,7 +584,12 @@ class VideoMergeViewModel(
                 VideoMergeResultEvent.Buffering -> state.copy(status = VideoEditorStatus.Buffering)
                 VideoMergeResultEvent.Playing -> state.copy(status = VideoEditorStatus.Playing)
                 VideoMergeResultEvent.Paused -> state.copy(status = VideoEditorStatus.Paused)
-                is VideoMergeResultEvent.Seeked -> state.copy(playbackPositionMs = result.positionMs)
+                is VideoMergeResultEvent.Seeked -> state.copy(
+                    playbackPositionMs = result.positionMs.coerceIn(
+                        0L,
+                        state.project?.let { VideoLayoutMath.outputDurationForMergedVideos(it.orderedClips) } ?: 0L,
+                    ),
+                )
                 is VideoMergeResultEvent.ExportQueued -> state.copy(
                     status = VideoEditorStatus.ExportQueued,
                     isExporting = true,
@@ -442,26 +598,41 @@ class VideoMergeViewModel(
                     exportResult = null,
                     error = null,
                 )
-                is VideoMergeResultEvent.ExportProgressChanged -> state.copy(
-                    status = VideoEditorStatus.Exporting,
-                    isExporting = true,
-                    exportProgress = result.progress.coerceIn(0f, 1f),
-                )
-                is VideoMergeResultEvent.ExportFinished -> state.copy(
-                    status = if (result.result is ExportResult.Success) {
-                        VideoEditorStatus.ExportCompleted
-                    } else {
-                        VideoEditorStatus.ExportFailed
-                    },
-                    isExporting = false,
-                    exportProgress = if (result.result is ExportResult.Success) 1f else state.exportProgress,
-                    exportResult = result.result,
-                )
-                VideoMergeResultEvent.ExportCancelled -> state.copy(
-                    status = VideoEditorStatus.ExportCancelled,
-                    isExporting = false,
-                    exportProgress = 0f,
-                )
+                is VideoMergeResultEvent.ExportProgressChanged -> if (state.acceptsExportWork(result.workId)) {
+                    state.copy(
+                        status = VideoEditorStatus.Exporting,
+                        isExporting = true,
+                        exportWorkId = result.workId ?: state.exportWorkId,
+                        exportProgress = result.progress.coerceIn(0f, 1f),
+                    )
+                } else {
+                    state
+                }
+                is VideoMergeResultEvent.ExportFinished -> if (state.acceptsExportWork(result.workId)) {
+                    state.copy(
+                        status = if (result.result is ExportResult.Success) {
+                            VideoEditorStatus.ExportCompleted
+                        } else {
+                            VideoEditorStatus.ExportFailed
+                        },
+                        isExporting = false,
+                        exportWorkId = result.workId ?: state.exportWorkId,
+                        exportProgress = if (result.result is ExportResult.Success) 1f else state.exportProgress,
+                        exportResult = result.result,
+                    )
+                } else {
+                    state
+                }
+                is VideoMergeResultEvent.ExportCancelled -> if (state.acceptsExportWork(result.workId)) {
+                    state.copy(
+                        status = VideoEditorStatus.ExportCancelled,
+                        isExporting = false,
+                        exportWorkId = result.workId ?: state.exportWorkId,
+                        exportProgress = 0f,
+                    )
+                } else {
+                    state
+                }
                 is VideoMergeResultEvent.Failed -> state.copy(
                     status = VideoEditorStatus.RecoverableMediaError,
                     error = result.messageRes,
@@ -481,7 +652,9 @@ class VideoMergeViewModel(
         return copy(
             template = targetTemplate,
             mediaByCell = videos.toCellMap(targetTemplate),
-            selectedCellIndex = targetTemplate.cells.firstOrNull()?.index ?: 0,
+            selectedCellIndex = selectedCellIndex?.takeIf { selected ->
+                targetTemplate.cells.any { it.index == selected }
+            } ?: targetTemplate.cells.firstOrNull()?.index ?: 0,
             spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
             cornerRadiusDp = 0f,
         ).withAvailableAudio()
@@ -494,6 +667,17 @@ class VideoMergeViewModel(
                 .sortedBy { it.key }
                 .mapNotNull { (_, media) -> media as? MediaSource.Video }
         }
+    }
+
+    private fun VideoMergeProject.orderedVideoCellIndexes(): List<Int> {
+        val templateIndexes = template.cells.map { it.index }
+        val templateMediaIndexes = templateIndexes.filter { mediaByCell[it] is MediaSource.Video }
+        val extraMediaIndexes = mediaByCell
+            .filterKeys { it !in templateIndexes }
+            .filterValues { it is MediaSource.Video }
+            .keys
+            .sorted()
+        return templateMediaIndexes + extraMediaIndexes
     }
 
     private fun VideoMergeProject.orderedCellIndexPosition(cellIndex: Int): Int {
@@ -573,5 +757,31 @@ class VideoMergeViewModel(
 
     private companion object {
         const val MaxUndoDepth = 30
+        const val TransformGestureIdleMillis = 250L
+        const val ExportRecoveryGraceMillis = 5_000L
+        const val ExportSchedulingFailure = "Could not schedule video export. Try again."
+        const val ExportRecoveryFailure = "The previous video export could not be recovered. Export again."
     }
 }
+
+internal fun VideoExportWorkEntity.toVideoMergeResultEvent(): VideoMergeResultEvent? =
+    when (state) {
+        VideoExportWorker.StateQueued -> VideoMergeResultEvent.ExportQueued(workId)
+        VideoExportWorker.StateRunning -> VideoMergeResultEvent.ExportProgressChanged(workId, progress)
+        VideoExportWorker.StateSucceeded -> VideoMergeResultEvent.ExportFinished(
+            workId = workId,
+            result = outputUri
+                ?.takeIf { it.isNotBlank() }
+                ?.let(ExportResult::Success)
+                ?: ExportResult.Failure("Saved video is unavailable."),
+        )
+        VideoExportWorker.StateFailed -> VideoMergeResultEvent.ExportFinished(
+            workId = workId,
+            result = ExportResult.Failure(errorMessage?.takeIf { it.isNotBlank() } ?: "Video export failed."),
+        )
+        VideoExportWorker.StateCancelled -> VideoMergeResultEvent.ExportCancelled(workId)
+        else -> null
+    }
+
+internal fun VideoMergeState.acceptsExportWork(workId: String?): Boolean =
+    exportWorkId == null || exportWorkId == workId

@@ -3,14 +3,11 @@ package com.rameshta.splitframe.presentation.video
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -31,9 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -71,19 +66,16 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -91,6 +83,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -99,16 +92,16 @@ import androidx.media3.ui.compose.ContentFrame
 import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 import coil.compose.AsyncImage
 import com.rameshta.splitframe.R
+import com.rameshta.splitframe.ads.ExternalUiReason
+import com.rameshta.splitframe.ads.LocalExternalUiLauncher
 import com.rameshta.splitframe.domain.ExportResolution
 import com.rameshta.splitframe.domain.ImageDimensions
 import com.rameshta.splitframe.domain.ImageTransform
 import com.rameshta.splitframe.domain.LayoutMath
-import com.rameshta.splitframe.domain.MediaDurationMode
+import com.rameshta.splitframe.domain.MergedVideoTimelinePosition
 import com.rameshta.splitframe.domain.MediaSource
-import com.rameshta.splitframe.domain.MixedMediaLimits
 import com.rameshta.splitframe.domain.VideoCanvasAspectRatio
 import com.rameshta.splitframe.domain.VideoClip
-import com.rameshta.splitframe.domain.VideoFitMode
 import com.rameshta.splitframe.domain.VideoLayoutMath
 import com.rameshta.splitframe.domain.VideoMergeProject
 import com.rameshta.splitframe.ui.components.PrimaryActionButton
@@ -130,6 +123,7 @@ fun VideoEditorScreen(
 ) {
     val project = state.project ?: return
     val context = LocalContext.current
+    val externalUiLauncher = LocalExternalUiLauncher.current
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingSinglePickCellIndex by remember { mutableStateOf<Int?>(null) }
     val multiPicker = rememberLauncherForActivityResult(
@@ -152,12 +146,14 @@ fun VideoEditorScreen(
     }
     val pickMixed = {
         if (!state.isExporting) {
-            multiPicker.launch(
-                PickVisualMediaRequest(
-                    mediaType = ActivityResultContracts.PickVisualMedia.VideoOnly,
-                    isOrderedSelection = true,
-                ),
-            )
+            externalUiLauncher.launch(ExternalUiReason.MediaPicker) {
+                multiPicker.launch(
+                    PickVisualMediaRequest(
+                        mediaType = ActivityResultContracts.PickVisualMedia.VideoOnly,
+                        isOrderedSelection = true,
+                    ),
+                )
+            }
         }
     }
     fun pickMediaForCell(cellIndex: Int) {
@@ -166,7 +162,9 @@ fun VideoEditorScreen(
         if (!isTemplateCell) return
         pendingSinglePickCellIndex = cellIndex
         onIntent(VideoMergeIntent.SelectClip(cellIndex))
-        singlePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+        externalUiLauncher.launch(ExternalUiReason.MediaPicker) {
+            singlePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+        }
     }
     val replaceSelected = {
         pickMediaForCell(state.selectedClipIndex)
@@ -231,7 +229,6 @@ fun VideoEditorScreen(
                     FixedPreviewPane(
                         state = state,
                         onIntent = onIntent,
-                        onPickCellMedia = ::pickMediaForCell,
                         modifier = Modifier
                             .weight(1.2f)
                             .fillMaxHeight(),
@@ -264,7 +261,6 @@ fun VideoEditorScreen(
                     FixedPreviewPane(
                         state = state,
                         onIntent = onIntent,
-                        onPickCellMedia = ::pickMediaForCell,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 220.dp, max = 380.dp),
@@ -288,7 +284,6 @@ fun VideoEditorScreen(
 private fun FixedPreviewPane(
     state: VideoMergeState,
     onIntent: (VideoMergeIntent) -> Unit,
-    onPickCellMedia: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -298,7 +293,6 @@ private fun FixedPreviewPane(
         VideoPreviewCanvas(
             state = state,
             onIntent = onIntent,
-            onPickCellMedia = onPickCellMedia,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(state.project?.canvasAspectRatio?.ratio ?: 16f / 9f),
@@ -313,37 +307,47 @@ private fun PlaybackControls(
     onIntent: (VideoMergeIntent) -> Unit,
 ) {
     val project = state.project ?: return
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(
-            onClick = {
-                if (state.status == VideoEditorStatus.Playing) {
-                    onIntent(VideoMergeIntent.Pause)
-                } else {
-                    onIntent(VideoMergeIntent.Play)
-                }
-            },
-            enabled = project.mediaByCell.values.any { it is MediaSource.Video },
-        ) {
-            Icon(
-                imageVector = if (state.status == VideoEditorStatus.Playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = if (state.status == VideoEditorStatus.Playing) {
-                    stringResource(R.string.video_pause)
-                } else {
-                    stringResource(R.string.video_play)
+    val durationMs = VideoLayoutMath.outputDurationForMergedVideos(project.orderedClips)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                onClick = {
+                    if (state.status == VideoEditorStatus.Playing) {
+                        onIntent(VideoMergeIntent.Pause)
+                    } else {
+                        onIntent(VideoMergeIntent.Play)
+                    }
                 },
+                enabled = durationMs > 0L && !state.isExporting,
+            ) {
+                Icon(
+                    imageVector = if (state.status == VideoEditorStatus.Playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (state.status == VideoEditorStatus.Playing) {
+                        stringResource(R.string.video_pause)
+                    } else {
+                        stringResource(R.string.video_play)
+                    },
+                )
+            }
+            Text(
+                text = stringResource(
+                    R.string.video_playback_position,
+                    state.playbackPositionMs.formatDuration(),
+                    durationMs.formatDuration(),
+                ),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Text(
-            text = state.playbackPositionMs.formatDuration(),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Slider(
+            value = state.playbackPositionMs.coerceIn(0L, durationMs).toFloat(),
+            onValueChange = { value ->
+                onIntent(VideoMergeIntent.Pause)
+                onIntent(VideoMergeIntent.SeekTo(value.toLong()))
+            },
+            enabled = durationMs > 0L && !state.isExporting,
+            valueRange = 0f..durationMs.coerceAtLeast(1L).toFloat(),
         )
-        if (project.mediaByCell.values.filterIsInstance<MediaSource.Video>().size > MixedMediaLimits.MaxLivePreviewVideos) {
-            StatusMessage(
-                text = stringResource(R.string.mixed_media_live_preview_limited),
-                tone = StatusTone.Info,
-            )
-        }
     }
 }
 
@@ -352,225 +356,205 @@ private fun PlaybackControls(
 private fun VideoPreviewCanvas(
     state: VideoMergeState,
     onIntent: (VideoMergeIntent) -> Unit,
-    onPickCellMedia: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val project = state.project ?: return
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val liveVideos = remember(project.mediaByCell, project.template.id) {
-        project.template.cells
-            .mapNotNull { cell -> (project.mediaByCell[cell.index] as? MediaSource.Video)?.let { cell.index to it.clip } }
-            .take(MixedMediaLimits.MaxLivePreviewVideos)
+    val clips = project.orderedClips
+    val playlistKey = remember(clips) {
+        clips.map { clip -> PreviewClipKey(clip.id, clip.uri, clip.trimStartMs, clip.trimEndMs) }
     }
-    val liveVideoIds = liveVideos.map { it.second.id }.toSet()
-    val players = remember { mutableStateMapOf<String, ExoPlayer>() }
+    val player = remember(context.applicationContext) {
+        ExoPlayer.Builder(context.applicationContext).build().apply {
+            repeatMode = Player.REPEAT_MODE_OFF
+            volume = 1f
+        }
+    }
+    val currentOnIntent by rememberUpdatedState(onIntent)
     val currentStatus by rememberUpdatedState(state.status)
+    val currentPlaybackPositionMs by rememberUpdatedState(state.playbackPositionMs)
+    val timelinePosition = VideoLayoutMath.mergedVideoPositionAt(clips, state.playbackPositionMs)
+    val activeCellIndex = timelinePosition?.clip?.id?.let { activeClipId ->
+        project.mediaByCell.entries.firstOrNull { (_, media) ->
+            media is MediaSource.Video && media.clip.id == activeClipId
+        }?.key
+    }
+    val activeMedia = activeCellIndex?.let { project.mediaByCell[it] as? MediaSource.Video }
+    val currentActiveMedia by rememberUpdatedState(activeMedia)
+    val previewDescription = timelinePosition?.let { position ->
+        stringResource(R.string.video_sequence_preview, position.clipIndex + 1, clips.size)
+    } ?: stringResource(R.string.video_empty_sequence_preview)
 
-    DisposableEffect(liveVideoIds) {
-        liveVideos.forEach { (_, clip) ->
-            players.getOrPut(clip.id) { ExoPlayer.Builder(context).build() }
-        }
-        val removed = players.keys - liveVideoIds
-        removed.forEach { key -> players.remove(key)?.release() }
-        onDispose { }
+    DisposableEffect(player) {
+        onDispose { player.release() }
     }
-    DisposableEffect(Unit) {
-        onDispose {
-            players.values.forEach { it.release() }
-            players.clear()
-        }
-    }
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, player) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) {
-                players.values.forEach { it.pause() }
-                onIntent(VideoMergeIntent.Pause)
+                player.pause()
+                if (currentStatus == VideoEditorStatus.Playing) {
+                    currentOnIntent(VideoMergeIntent.Pause)
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    liveVideos.forEach { (_, clip) ->
-        VideoPreviewPlayerEffect(players[clip.id], clip)
-    }
-    LaunchedEffect(project.primaryAudioMediaId, liveVideoIds) {
-        liveVideos.forEach { (_, clip) ->
-            players[clip.id]?.volume = if (clip.id == project.primaryAudioMediaId) 1f else 0f
+
+    LaunchedEffect(player, playlistKey) {
+        player.pause()
+        player.setMediaItems(clips.map(VideoClip::toPreviewMediaItem))
+        if (clips.isNotEmpty()) {
+            player.prepare()
+            VideoLayoutMath.mergedVideoPositionAt(clips, currentPlaybackPositionMs)?.let { position ->
+                player.seekTo(position.clipIndex, position.playerPositionMs())
+            }
+            if (currentStatus == VideoEditorStatus.Playing) player.play()
         }
     }
-    LaunchedEffect(state.playbackPositionMs, liveVideoIds, state.status) {
+
+    LaunchedEffect(player, state.playbackPositionMs, state.status, playlistKey) {
         if (state.status != VideoEditorStatus.Playing) {
-            liveVideos.forEach { (_, clip) ->
-                seekPreview(players[clip.id], clip, state.playbackPositionMs)
+            player.pause()
+            VideoLayoutMath.mergedVideoPositionAt(clips, state.playbackPositionMs)?.let { position ->
+                val targetPositionMs = position.playerPositionMs()
+                if (
+                    player.currentMediaItemIndex != position.clipIndex ||
+                    kotlin.math.abs(player.currentPosition - targetPositionMs) > PreviewSeekToleranceMs
+                ) {
+                    player.seekTo(position.clipIndex, targetPositionMs)
+                }
             }
         }
     }
-    LaunchedEffect(project.id, liveVideoIds, state.status, project.durationMode) {
-        var timelineStart = SystemClock.elapsedRealtime() - state.playbackPositionMs
-        while (currentStatus == VideoEditorStatus.Playing) {
-            val outputDurationMs = VideoLayoutMath.outputDurationForMedia(project.mediaByCell, project.durationMode)
-            val timelinePositionMs = (SystemClock.elapsedRealtime() - timelineStart).coerceAtLeast(0L)
-            if (outputDurationMs > 0L && timelinePositionMs >= outputDurationMs) {
-                players.values.forEach { it.pause() }
-                liveVideos.forEach { (_, clip) -> seekPreview(players[clip.id], clip, 0L) }
-                onIntent(VideoMergeIntent.SeekTo(0L))
-                timelineStart = SystemClock.elapsedRealtime()
-                delay(80)
-                if (currentStatus == VideoEditorStatus.Playing) {
-                    players.values.forEach { it.playWhenReady = true }
-                }
-            } else {
-                liveVideos.forEach { (_, clip) ->
-                    val target = if (project.durationMode == MediaDurationMode.LOOP_SHORTER) {
-                        VideoLayoutMath.loopedPositionMs(clip, timelinePositionMs) - clip.trimStartMs
-                    } else {
-                        timelinePositionMs.coerceIn(0L, clip.trimmedDurationMs)
-                    }
-                    val player = players[clip.id] ?: return@forEach
-                    if (kotlin.math.abs(player.currentPosition - target) > 240L && player.playbackState != Player.STATE_IDLE) {
-                        player.seekTo(target)
-                    }
-                    player.playWhenReady = true
-                }
-                onIntent(VideoMergeIntent.SeekTo(timelinePositionMs))
-                delay(250)
+
+    LaunchedEffect(player, state.status, playlistKey) {
+        if (state.status != VideoEditorStatus.Playing || clips.isEmpty()) return@LaunchedEffect
+        val durationMs = VideoLayoutMath.outputDurationForMergedVideos(clips)
+        if (durationMs <= 0L) {
+            currentOnIntent(VideoMergeIntent.Pause)
+            return@LaunchedEffect
+        }
+        VideoLayoutMath.mergedVideoPositionAt(clips, currentPlaybackPositionMs)?.let { position ->
+            if (
+                player.currentMediaItemIndex != position.clipIndex ||
+                kotlin.math.abs(player.currentPosition - position.playerPositionMs()) > PreviewSeekToleranceMs
+            ) {
+                player.seekTo(position.clipIndex, position.playerPositionMs())
             }
         }
-        players.values.forEach { it.pause() }
+        player.play()
+        while (currentStatus == VideoEditorStatus.Playing) {
+            if (player.playbackState == Player.STATE_ENDED) {
+                player.pause()
+                VideoLayoutMath.mergedVideoPositionAt(clips, durationMs)?.let { terminal ->
+                    player.seekTo(terminal.clipIndex, terminal.playerPositionMs())
+                }
+                currentOnIntent(VideoMergeIntent.SeekTo(durationMs))
+                currentOnIntent(VideoMergeIntent.Pause)
+                break
+            }
+            val itemIndex = player.currentMediaItemIndex.coerceIn(0, clips.lastIndex)
+            val itemStartMs = VideoLayoutMath.mergedVideoClipStartMs(clips, itemIndex) ?: 0L
+            val projectPositionMs = (itemStartMs + player.currentPosition).coerceIn(0L, durationMs)
+            currentOnIntent(VideoMergeIntent.SeekTo(projectPositionMs))
+            delay(PreviewProgressPollMs)
+        }
+        player.pause()
     }
 
     Surface(
-        color = project.backgroundColor.toComposeColor(),
+        color = Color.Black,
         shape = MaterialTheme.shapes.large,
         tonalElevation = 1.dp,
         modifier = modifier,
     ) {
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(project.spacingDp.dp),
-        ) {
-            project.template.cells.forEach { cell ->
-                val media = project.mediaByCell[cell.index]
-                val selected = state.selectedClipIndex == cell.index
-                val player = (media as? MediaSource.Video)?.let { players[it.id] }
-                val canPickEmptyCell = media == null &&
-                    !state.isExporting
-                MixedMediaCell(
-                    media = media,
-                    player = player,
-                    selected = selected,
-                    livePreview = player != null,
-                    modifier = Modifier
-                        .offset(x = maxWidth * cell.rect.x, y = maxHeight * cell.rect.y)
-                        .width(maxWidth * cell.rect.width)
-                        .height(maxHeight * cell.rect.height)
-                        .padding((project.spacingDp / 2f).dp),
-                    shape = RoundedCornerShape(project.cornerRadiusDp.dp),
-                    onSelect = {
-                        if (canPickEmptyCell) {
-                            onPickCellMedia(cell.index)
-                        } else {
-                            onIntent(VideoMergeIntent.SelectClip(cell.index))
-                        }
-                    },
-                    onTransform = { onIntent(VideoMergeIntent.UpdateVideoTransform(cell.index, it, trackUndo = false)) },
-                    onTransformCommit = { onIntent(VideoMergeIntent.UpdateVideoTransform(cell.index, it, trackUndo = true)) },
-                )
-            }
-        }
-    }
-}
-
-@OptIn(UnstableApi::class)
-@Composable
-private fun MixedMediaCell(
-    media: MediaSource?,
-    player: ExoPlayer?,
-    selected: Boolean,
-    livePreview: Boolean,
-    modifier: Modifier,
-    shape: RoundedCornerShape,
-    onSelect: () -> Unit,
-    onTransform: (ImageTransform) -> Unit,
-    onTransformCommit: (ImageTransform) -> Unit,
-) {
-    val colors = splitFrameColors()
-    val borderColor = if (selected) colors.selectedCell else MaterialTheme.colorScheme.outlineVariant
-    val emptyDescription = stringResource(R.string.video_empty_cell_description)
-    val cellDescription = stringResource(R.string.video_cell_description)
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .background(Color.Black)
-            .border(if (selected) 3.dp else 1.dp, borderColor, shape)
-            .semantics {
-                this.selected = selected
-                contentDescription = if (media == null) emptyDescription else cellDescription
-            }
-            .clickable(onClick = onSelect)
-            .pointerInput(media?.id, selected, media?.transform) {
-                if (!selected || media == null) return@pointerInput
-                var latest = media.transform
-                detectDragGestures(
-                    onDragEnd = { onTransformCommit(latest) },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        latest = LayoutMath.transformAfterGesture(
-                            sourceDimensions = ImageDimensions(media.width, media.height),
-                            destinationWidthPx = size.width.toFloat(),
-                            destinationHeightPx = size.height.toFloat(),
-                            current = latest,
-                            panXpx = dragAmount.x,
-                            panYpx = dragAmount.y,
-                            zoomChange = 1f,
-                        )
-                        onTransform(latest)
-                    },
-                )
-            }
-            .pointerInput(media?.id, selected, media?.transform) {
-                if (!selected || media == null) return@pointerInput
-                detectTapGestures(
-                    onDoubleTap = { offset ->
-                        val transform = LayoutMath.transformAfterDoubleTap(
-                            sourceDimensions = ImageDimensions(media.width, media.height),
-                            destinationWidthPx = size.width.toFloat(),
-                            destinationHeightPx = size.height.toFloat(),
-                            current = media.transform,
-                            tapXInFramePx = offset.x,
-                            tapYInFramePx = offset.y,
-                        )
-                        onTransformCommit(transform)
-                    },
-                )
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        when (media) {
-            null -> EmptyCell()
-            is MediaSource.Image -> ImageCell(media)
-            is MediaSource.Video -> {
-                if (player != null && livePreview) {
-                    ContentFrame(
-                        player = player,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = media.transform.zoom
-                                scaleY = media.transform.zoom
-                                translationX = media.transform.panX * size.width * 0.2f
-                                translationY = media.transform.panY * size.height * 0.2f
-                            },
-                        surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
-                        contentScale = if (media.fitMode == VideoFitMode.FIT) ContentScale.Fit else ContentScale.Crop,
-                        keepContentOnReset = true,
+                .semantics { contentDescription = previewDescription }
+                .pointerInput(activeMedia?.id, activeCellIndex) {
+                    val media = currentActiveMedia ?: return@pointerInput
+                    val cellIndex = activeCellIndex ?: return@pointerInput
+                    var latest = media.transform
+                    detectDragGestures(
+                        onDragEnd = {
+                            currentOnIntent(VideoMergeIntent.UpdateVideoTransform(cellIndex, latest, trackUndo = true))
+                        },
+                        onDragCancel = {
+                            currentOnIntent(VideoMergeIntent.UpdateVideoTransform(cellIndex, latest, trackUndo = true))
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            latest = LayoutMath.transformAfterGesture(
+                                sourceDimensions = ImageDimensions(media.width, media.height),
+                                destinationWidthPx = size.width.toFloat(),
+                                destinationHeightPx = size.height.toFloat(),
+                                current = latest,
+                                panXpx = dragAmount.x,
+                                panYpx = dragAmount.y,
+                                zoomChange = 1f,
+                            )
+                            currentOnIntent(VideoMergeIntent.UpdateVideoTransform(cellIndex, latest, trackUndo = false))
+                        },
                     )
-                } else {
-                    VideoPosterCell(media)
                 }
-                MediaBadge(stringResource(R.string.mixed_media_video_label), Modifier.align(Alignment.TopStart))
+                .pointerInput(activeMedia?.id, activeCellIndex) {
+                    if (currentActiveMedia == null) return@pointerInput
+                    val cellIndex = activeCellIndex ?: return@pointerInput
+                    detectTapGestures(
+                        onDoubleTap = { offset ->
+                            val latestMedia = currentActiveMedia ?: return@detectTapGestures
+                            val transform = LayoutMath.transformAfterDoubleTap(
+                                sourceDimensions = ImageDimensions(latestMedia.width, latestMedia.height),
+                                destinationWidthPx = size.width.toFloat(),
+                                destinationHeightPx = size.height.toFloat(),
+                                current = latestMedia.transform,
+                                tapXInFramePx = offset.x,
+                                tapYInFramePx = offset.y,
+                            )
+                            currentOnIntent(VideoMergeIntent.UpdateVideoTransform(cellIndex, transform, trackUndo = true))
+                        },
+                    )
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (activeMedia == null) {
+                EmptyCell()
+            } else {
+                ContentFrame(
+                    player = player,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val transform = activeMedia.transform.normalized()
+                            val crop = LayoutMath.cropToFillSourceRect(
+                                sourceWidthPx = activeMedia.width.toFloat(),
+                                sourceHeightPx = activeMedia.height.toFloat(),
+                                destinationWidthPx = size.width,
+                                destinationHeightPx = size.height,
+                                transform = transform,
+                            )
+                            scaleX = transform.zoom
+                            scaleY = transform.zoom
+                            translationX = -(crop.centerX - activeMedia.width / 2f) *
+                                (size.width / crop.width.coerceAtLeast(1f))
+                            translationY = -(crop.centerY - activeMedia.height / 2f) *
+                                (size.height / crop.height.coerceAtLeast(1f))
+                        },
+                    surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
+                    contentScale = ContentScale.Crop,
+                    keepContentOnReset = true,
+                )
+                MediaBadge(
+                    text = stringResource(
+                        R.string.video_sequence_preview,
+                        (timelinePosition?.clipIndex ?: 0) + 1,
+                        clips.size,
+                    ),
+                    modifier = Modifier.align(Alignment.TopStart),
+                )
             }
         }
     }
@@ -582,35 +566,6 @@ private fun EmptyCell() {
         Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = Color.White)
         Text(
             text = stringResource(R.string.video_clip_empty),
-            color = Color.White,
-            style = MaterialTheme.typography.labelLarge,
-        )
-    }
-}
-
-@Composable
-private fun ImageCell(media: MediaSource.Image) {
-    AsyncImage(
-        model = Uri.parse(media.enhancedPath ?: media.uri),
-        contentDescription = null,
-        contentScale = if (media.fitMode == VideoFitMode.FIT) ContentScale.Fit else ContentScale.Crop,
-        modifier = Modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                scaleX = media.transform.zoom
-                scaleY = media.transform.zoom
-                translationX = media.transform.panX * size.width * 0.2f
-                translationY = media.transform.panY * size.height * 0.2f
-            },
-    )
-    MediaBadge(stringResource(R.string.mixed_media_image_label), Modifier.padding(6.dp))
-}
-
-@Composable
-private fun VideoPosterCell(media: MediaSource.Video) {
-    Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-        Text(
-            text = media.clip.trimmedDurationMs.formatDuration(),
             color = Color.White,
             style = MaterialTheme.typography.labelLarge,
         )
@@ -630,16 +585,6 @@ private fun MediaBadge(text: String, modifier: Modifier = Modifier) {
             color = Color.White,
             style = MaterialTheme.typography.labelSmall,
         )
-    }
-}
-
-@Composable
-private fun VideoPreviewPlayerEffect(player: ExoPlayer?, clip: VideoClip) {
-    LaunchedEffect(player, clip.uri, clip.trimStartMs, clip.trimEndMs) {
-        if (player == null) return@LaunchedEffect
-        player.setMediaItem(clip.toPreviewMediaItem())
-        player.prepare()
-        player.seekTo(0L)
     }
 }
 
@@ -944,16 +889,6 @@ private fun TransformControls(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(text = stringResource(R.string.video_crop_position), style = MaterialTheme.typography.titleSmall)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = media.fitMode == VideoFitMode.FILL,
-                onClick = { onIntent(VideoMergeIntent.SelectFitMode(cellIndex, VideoFitMode.FILL)) },
-                label = { Text(stringResource(R.string.video_fit_fill)) },
-            )
-            FilterChip(
-                selected = media.fitMode == VideoFitMode.FIT,
-                onClick = { onIntent(VideoMergeIntent.SelectFitMode(cellIndex, VideoFitMode.FIT)) },
-                label = { Text(stringResource(R.string.video_fit_fit)) },
-            )
             AssistChip(
                 onClick = { onIntent(VideoMergeIntent.ResetVideoTransform(cellIndex)) },
                 label = { Text(stringResource(R.string.reset)) },
@@ -1071,6 +1006,7 @@ private fun PersistentExportAction(
 
 private fun VideoClip.toPreviewMediaItem(): MediaItem =
     MediaItem.Builder()
+        .setMediaId(id)
         .setUri(Uri.parse(uri))
         .setClippingConfiguration(
             MediaItem.ClippingConfiguration.Builder()
@@ -1080,19 +1016,25 @@ private fun VideoClip.toPreviewMediaItem(): MediaItem =
         )
         .build()
 
-private fun seekPreview(player: ExoPlayer?, clip: VideoClip, projectPositionMs: Long) {
-    if (player == null) return
-    val target = VideoLayoutMath.loopedPositionMs(clip, projectPositionMs) - clip.trimStartMs
-    player.seekTo(target.coerceIn(0L, clip.trimmedDurationMs))
-}
+private fun MergedVideoTimelinePosition.playerPositionMs(): Long =
+    if (positionInTrimMs >= clip.trimmedDurationMs) {
+        (clip.trimmedDurationMs - 1L).coerceAtLeast(0L)
+    } else {
+        positionInTrimMs
+    }
+
+private data class PreviewClipKey(
+    val id: String,
+    val uri: String,
+    val trimStartMs: Long,
+    val trimEndMs: Long,
+)
 
 private fun Context.persistMediaUriAccessIfSupported(uri: Uri) {
     runCatching {
         contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 }
-
-private fun ULong.toComposeColor(): Color = Color(toLong().toInt())
 
 private fun Long.formatDuration(): String {
     val totalSeconds = (this / 1000).coerceAtLeast(0)
@@ -1107,5 +1049,8 @@ private fun Long.formatFileSize(): String =
     } else {
         "${(this / 1024L).coerceAtLeast(1L)} KB"
     }
+
+private const val PreviewSeekToleranceMs = 240L
+private const val PreviewProgressPollMs = 200L
 
 private fun Float.percent(): String = "${(this * 100).roundToInt()}%"

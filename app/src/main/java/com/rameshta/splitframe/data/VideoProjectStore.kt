@@ -2,6 +2,8 @@ package com.rameshta.splitframe.data
 
 import com.rameshta.splitframe.data.local.VideoExportWorkDao
 import com.rameshta.splitframe.data.local.VideoExportWorkEntity
+import com.rameshta.splitframe.data.local.RecentProjectDao
+import com.rameshta.splitframe.data.local.RecentProjectEntity
 import com.rameshta.splitframe.data.local.VideoProjectDao
 import com.rameshta.splitframe.data.local.VideoProjectEntity
 import com.rameshta.splitframe.domain.ExportResolution
@@ -23,42 +25,123 @@ import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
+sealed interface VideoProjectReadResult {
+    data class Ready(val project: VideoMergeProject) : VideoProjectReadResult
+    data class Corrupt(val projectId: String) : VideoProjectReadResult
+    data object NotFound : VideoProjectReadResult
+}
+
 class VideoProjectStore(
     private val projectDao: VideoProjectDao,
     private val exportWorkDao: VideoExportWorkDao,
+    private val recentProjectDao: RecentProjectDao? = null,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
     suspend fun getOrCreate(projectId: String?): VideoMergeProject {
-        val existing = projectId?.let { projectDao.get(it)?.toProject() }
+        val existing = projectId?.let { get(it) }
         return existing ?: VideoMergeProject(id = projectId ?: UUID.randomUUID().toString())
     }
 
-    suspend fun get(projectId: String): VideoMergeProject? =
-        projectDao.get(projectId)?.toProject()
-
-    fun observeProject(projectId: String): Flow<VideoMergeProject?> =
-        projectDao.observe(projectId).map { it?.toProject() }
-
-    suspend fun save(project: VideoMergeProject) {
-        projectDao.upsert(project.toEntity())
+    suspend fun openProject(
+        projectId: String,
+        createIfMissing: Boolean,
+    ): VideoMergeProject? {
+        when (val result = inspect(projectId)) {
+            is VideoProjectReadResult.Ready -> return result.project
+            is VideoProjectReadResult.Corrupt -> return null
+            VideoProjectReadResult.NotFound -> Unit
+        }
+        if (!createIfMissing) return null
+        val created = VideoMergeProject(id = projectId)
+        return if (save(created)) created else (inspect(projectId) as? VideoProjectReadResult.Ready)?.project
     }
 
-    suspend fun reset(projectId: String) {
-        projectDao.upsert(VideoMergeProject(id = projectId).toEntity())
-        exportWorkDao.delete(projectId)
+    suspend fun get(projectId: String): VideoMergeProject? =
+        (inspect(projectId) as? VideoProjectReadResult.Ready)?.project
+
+    suspend fun inspect(projectId: String): VideoProjectReadResult {
+        val recentDao = recentProjectDao
+        if (recentDao != null) {
+            val recent = recentDao.get(projectId) ?: return VideoProjectReadResult.NotFound
+            if (recent.deletedAtMillis != null) return VideoProjectReadResult.NotFound
+        }
+        val entity = projectDao.get(projectId) ?: return VideoProjectReadResult.NotFound
+        return entity.toProjectOrNull()
+            ?.let(VideoProjectReadResult::Ready)
+            ?: VideoProjectReadResult.Corrupt(projectId)
+    }
+
+    fun observeProject(projectId: String): Flow<VideoMergeProject?> =
+        projectDao.observe(projectId).map { it?.toProjectOrNull() }
+
+    suspend fun save(
+        project: VideoMergeProject,
+        initialName: String = DefaultProjectName,
+    ): Boolean {
+        val updatedAt = clock()
+        val entity = project.toEntity(updatedAt)
+        val recentDao = recentProjectDao
+        if (recentDao == null) {
+            projectDao.upsert(entity)
+            return true
+        }
+        return recentDao.saveActiveVideoProject(
+            project = entity,
+            recentProject = project.toRecentEntity(initialName, updatedAt),
+        )
+    }
+
+    suspend fun reset(projectId: String): Boolean {
+        val reset = VideoMergeProject(id = projectId)
+        val updatedAt = clock()
+        val recentDao = recentProjectDao
+        if (recentDao == null) {
+            projectDao.upsert(reset.toEntity(updatedAt))
+            exportWorkDao.delete(projectId)
+            return true
+        }
+        return recentDao.resetActiveVideoProject(
+            project = reset.toEntity(updatedAt),
+            recentProject = reset.toRecentEntity(DefaultProjectName, updatedAt),
+        )
     }
 
     fun observeExportWork(projectId: String): Flow<VideoExportWorkEntity?> =
         exportWorkDao.observe(projectId)
 
+    fun observeHasActiveExport(): Flow<Boolean> = exportWorkDao.observeHasActiveExport()
+
+    suspend fun getExportWork(projectId: String): VideoExportWorkEntity? =
+        exportWorkDao.get(projectId)
+
+    suspend fun getActiveExportWork(): List<VideoExportWorkEntity> = exportWorkDao.getActive()
+
     suspend fun setExportWork(work: VideoExportWorkEntity) {
         exportWorkDao.upsert(work)
+    }
+
+    suspend fun updateExportWorkIfCurrent(
+        work: VideoExportWorkEntity,
+        expectedStates: List<String>,
+    ): Boolean {
+        val workId = work.workId ?: return false
+        return exportWorkDao.updateIfWorkMatches(
+            projectId = work.projectId,
+            workId = workId,
+            state = work.state,
+            progress = work.progress,
+            outputUri = work.outputUri,
+            errorMessage = work.errorMessage,
+            updatedAtMillis = work.updatedAtMillis,
+            expectedStates = expectedStates,
+        ) == 1
     }
 
     suspend fun clearExportWork(projectId: String) {
         exportWorkDao.delete(projectId)
     }
 
-    private fun VideoMergeProject.toEntity(): VideoProjectEntity =
+    private fun VideoMergeProject.toEntity(updatedAtMillis: Long): VideoProjectEntity =
         VideoProjectEntity(
             id = id,
             layout = (legacyLayout ?: VideoLayout.SIDE_BY_SIDE).name,
@@ -69,7 +152,7 @@ class VideoProjectStore(
             spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
             cornerRadiusDp = cornerRadiusDp,
             backgroundColor = backgroundColor.toLong(),
-            updatedAtMillis = System.currentTimeMillis(),
+            updatedAtMillis = updatedAtMillis,
             clip0 = clips[0]?.encode(),
             clip1 = clips[1]?.encode(),
             templateId = template.id,
@@ -79,33 +162,55 @@ class VideoProjectStore(
             mergeMode = LegacySequenceMergeMode,
         )
 
-    private fun VideoProjectEntity.toProject(): VideoMergeProject {
-        val aspectRatio = enumValueOrDefault(canvasAspectRatio, VideoCanvasAspectRatio.RATIO_16_9)
+    private fun VideoMergeProject.toRecentEntity(
+        initialName: String,
+        updatedAtMillis: Long,
+    ): RecentProjectEntity =
+        RecentProjectEntity(
+            projectId = id,
+            projectType = ProjectTypeVideo,
+            name = initialName,
+            projectFormatVersion = ProjectFormatVersion,
+            layoutVersion = LayoutVersion,
+            thumbnailUri = orderedMedia.firstOrNull()?.uri,
+            createdAtMillis = updatedAtMillis,
+            updatedAtMillis = updatedAtMillis,
+            deletedAtMillis = null,
+            deletionToken = null,
+        )
+
+    private fun VideoProjectEntity.toProjectOrNull(): VideoMergeProject? = runCatching {
+        require(mergeMode == LegacySequenceMergeMode)
+        val aspectRatio = enumValueStrict<VideoCanvasAspectRatio>(canvasAspectRatio)
         val legacyLayout = enumValueOrDefault(layout, VideoLayout.SIDE_BY_SIDE)
-        val decodedMedia = mediaItems?.decodeMediaItems().orEmpty().ifEmpty {
-            buildMap {
-                clip0?.decodeClip()?.let { put(0, MediaSource.Video(it)) }
-                clip1?.decodeClip()?.let { put(1, MediaSource.Video(it)) }
+        val decodedMedia = when {
+            mediaItems == null -> buildMap {
+                clip0?.let { put(0, MediaSource.Video(it.decodeClipStrict())) }
+                clip1?.let { put(1, MediaSource.Video(it.decodeClipStrict())) }
             }
+            mediaItems.isBlank() -> emptyMap()
+            else -> mediaItems.decodeMediaItemsStrict()
         }
+        require(decodedMedia.keys.all { it >= 0 })
+        require(decodedMedia.values.map { it.id }.distinct().size == decodedMedia.size)
         val template = VideoLayoutMath.sequenceTemplateCount(templateId.orEmpty())
             ?.let { count -> VideoLayoutMath.sequenceTemplateFor(maxOf(count, decodedMedia.size), aspectRatio) }
             ?: MixedMediaTemplateCatalog.byId(templateId)
             ?: VideoLayoutMath.sequenceTemplateFor(decodedMedia.size, aspectRatio)
-        return VideoMergeProject(
+        VideoMergeProject(
             id = id,
             mediaByCell = decodedMedia,
             selectedCellIndex = selectedCellIndex ?: decodedMedia.keys.minOrNull() ?: 0,
             template = template,
             canvasAspectRatio = aspectRatio,
-            exportResolution = enumValueOrDefault(exportResolution, ExportResolution.FHD_1080),
+            exportResolution = enumValueStrict(exportResolution),
             primaryAudioMediaId = primaryAudioMediaId ?: legacyAudioMediaId(primaryAudioSource, decodedMedia),
-            durationMode = durationMode.toDurationMode(),
+            durationMode = durationMode.toDurationModeStrict(),
             spacingDp = VideoLayoutMath.EdgeToEdgeSpacingDp,
             cornerRadiusDp = cornerRadiusDp,
             backgroundColor = backgroundColor.toULong(),
         )
-    }
+    }.getOrNull()
 
     private fun VideoMergeProject.legacyAudioSource(): VideoAudioSource =
         when (primaryAudioMediaId) {
@@ -181,43 +286,51 @@ class VideoProjectStore(
             fields.joinToString(FieldSeparator) { it.urlEncode() }
         }
 
-    private fun String.decodeMediaItems(): Map<Int, MediaSource> =
-        lineSequence()
-            .mapNotNull { row ->
-                runCatching {
-                    val fields = row.split(FieldSeparator).map { it.urlDecode() }
-                    val cellIndex = fields[0].toInt()
-                    val media = when (fields[1]) {
-                        TypeImage -> MediaSource.Image(
-                            id = fields[2],
-                            uri = fields[3],
-                            width = fields[4].toInt(),
-                            height = fields[5].toInt(),
-                            mimeType = fields.getOrNull(11)?.ifBlank { null },
-                            sizeBytes = fields.getOrNull(12)?.toLongOrNull(),
-                            enhancedPath = fields.getOrNull(19)?.ifBlank { null },
-                            editState = ImageEditState(
-                                scale = fields.getOrNull(20)?.toFloatOrNull() ?: 1f,
-                                offsetX = fields.getOrNull(21)?.toFloatOrNull() ?: 0f,
-                                offsetY = fields.getOrNull(22)?.toFloatOrNull() ?: 0f,
-                            ),
-                            transform = ImageTransform(
-                                zoom = fields[15].toFloat(),
-                                panX = fields[16].toFloat(),
-                                panY = fields[17].toFloat(),
-                            ).normalized(),
-                            fitMode = enumValueOrDefault(fields[18], VideoFitMode.FILL),
-                        )
-                        TypeVideo -> MediaSource.Video(fields.decodeClipFromMediaFields())
-                        else -> null
-                    }
-                    media?.let { cellIndex to it }
-                }.getOrNull()
+    private fun String.decodeMediaItemsStrict(): Map<Int, MediaSource> =
+        lineSequence().fold(mutableMapOf()) { decoded, row ->
+            require(row.isNotBlank())
+            val fields = row.split(FieldSeparator).map { it.urlDecode() }
+            require(fields.size >= MinimumMediaFieldCount)
+            val cellIndex = fields[0].toInt()
+            require(cellIndex >= 0 && cellIndex !in decoded)
+            val media = when (fields[1]) {
+                TypeImage -> fields.decodeImageFromMediaFields()
+                TypeVideo -> MediaSource.Video(fields.decodeClipFromMediaFields())
+                else -> error("Unknown persisted media type")
             }
-            .toMap()
+            require(media.id.isNotBlank() && media.uri.isNotBlank())
+            require(media.width > 0 && media.height > 0)
+            decoded[cellIndex] = media
+            decoded
+        }
 
-    private fun List<String>.decodeClipFromMediaFields(): VideoClip =
-        VideoClip(
+    private fun List<String>.decodeImageFromMediaFields(): MediaSource.Image {
+        require(size >= ImageMediaFieldCount)
+        val editScale = this[20].toFloat()
+        val editOffsetX = this[21].toFloat()
+        val editOffsetY = this[22].toFloat()
+        require(editScale.isFinite() && editScale > 0f && editOffsetX.isFinite() && editOffsetY.isFinite())
+        return MediaSource.Image(
+            id = this[2],
+            uri = this[3],
+            width = this[4].toInt(),
+            height = this[5].toInt(),
+            mimeType = this[11].ifBlank { null },
+            sizeBytes = this[12].optionalLongStrict(),
+            enhancedPath = this[19].ifBlank { null },
+            editState = ImageEditState(
+                scale = editScale,
+                offsetX = editOffsetX,
+                offsetY = editOffsetY,
+            ),
+            transform = decodeTransform(15),
+            fitMode = enumValueStrict(this[18]),
+        )
+    }
+
+    private fun List<String>.decodeClipFromMediaFields(): VideoClip {
+        require(size >= MinimumMediaFieldCount)
+        val clip = VideoClip(
             id = this[2],
             uri = this[3],
             width = this[4].toInt(),
@@ -226,18 +339,17 @@ class VideoProjectStore(
             trimStartMs = this[7].toLong(),
             trimEndMs = this[8].toLong(),
             rotationDegrees = this[9].toInt(),
-            frameRate = this[10].toFloatOrNull(),
+            frameRate = this[10].optionalFloatStrict(),
             mimeType = this[11].ifBlank { null },
-            sizeBytes = this[12].toLongOrNull(),
-            hasAudio = this[13].toBooleanStrictOrNull() ?: false,
-            isHdr = this[14].toBooleanStrictOrNull() ?: false,
-            transform = ImageTransform(
-                zoom = this[15].toFloat(),
-                panX = this[16].toFloat(),
-                panY = this[17].toFloat(),
-            ).normalized(),
-            fitMode = enumValueOrDefault(this[18], VideoFitMode.FILL),
-        ).normalizedTrim()
+            sizeBytes = this[12].optionalLongStrict(),
+            hasAudio = requireNotNull(this[13].toBooleanStrictOrNull()),
+            isHdr = requireNotNull(this[14].toBooleanStrictOrNull()),
+            transform = decodeTransform(15),
+            fitMode = enumValueStrict(this[18]),
+        )
+        requireValidClip(clip)
+        return clip
+    }
 
     private fun VideoClip.encode(): String =
         listOf(
@@ -260,41 +372,70 @@ class VideoProjectStore(
             fitMode.name,
         ).joinToString(FieldSeparator) { it.urlEncode() }
 
-    private fun String.decodeClip(): VideoClip? =
-        runCatching {
-            val fields = split(FieldSeparator).map { it.urlDecode() }
-            VideoClip(
-                id = fields[0],
-                uri = fields[1],
-                durationMs = fields[2].toLong(),
-                trimStartMs = fields[3].toLong(),
-                trimEndMs = fields[4].toLong(),
-                width = fields[5].toInt(),
-                height = fields[6].toInt(),
-                rotationDegrees = fields[7].toInt(),
-                frameRate = fields[8].toFloatOrNull(),
-                mimeType = fields[9].ifBlank { null },
-                sizeBytes = fields[10].toLongOrNull(),
-                hasAudio = fields[11].toBooleanStrictOrNull() ?: false,
-                isHdr = fields[12].toBooleanStrictOrNull() ?: false,
-                transform = ImageTransform(
-                    zoom = fields[13].toFloat(),
-                    panX = fields[14].toFloat(),
-                    panY = fields[15].toFloat(),
-                ).normalized(),
-                fitMode = enumValueOrDefault(fields[16], VideoFitMode.FILL),
-            ).normalizedTrim()
-        }.getOrNull()
+    private fun String.decodeClipStrict(): VideoClip {
+        val fields = split(FieldSeparator).map { it.urlDecode() }
+        require(fields.size >= LegacyClipFieldCount)
+        val clip = VideoClip(
+            id = fields[0],
+            uri = fields[1],
+            durationMs = fields[2].toLong(),
+            trimStartMs = fields[3].toLong(),
+            trimEndMs = fields[4].toLong(),
+            width = fields[5].toInt(),
+            height = fields[6].toInt(),
+            rotationDegrees = fields[7].toInt(),
+            frameRate = fields[8].optionalFloatStrict(),
+            mimeType = fields[9].ifBlank { null },
+            sizeBytes = fields[10].optionalLongStrict(),
+            hasAudio = requireNotNull(fields[11].toBooleanStrictOrNull()),
+            isHdr = requireNotNull(fields[12].toBooleanStrictOrNull()),
+            transform = fields.decodeTransform(13),
+            fitMode = enumValueStrict(fields[16]),
+        )
+        requireValidClip(clip)
+        return clip
+    }
 
-    private fun String.toDurationMode(): MediaDurationMode =
+    private fun List<String>.decodeTransform(startIndex: Int): ImageTransform {
+        val zoom = this[startIndex].toFloat()
+        val panX = this[startIndex + 1].toFloat()
+        val panY = this[startIndex + 2].toFloat()
+        require(zoom.isFinite() && panX.isFinite() && panY.isFinite())
+        require(zoom in ImageTransform.MIN_ZOOM..ImageTransform.MAX_ZOOM)
+        require(panX in -1f..1f && panY in -1f..1f)
+        return ImageTransform(zoom = zoom, panX = panX, panY = panY)
+    }
+
+    private fun requireValidClip(clip: VideoClip) {
+        require(clip.id.isNotBlank() && clip.uri.isNotBlank())
+        require(clip.width > 0 && clip.height > 0)
+        require(clip.durationMs >= VideoLayoutMath.MinTrimDurationMs)
+        require(clip.trimStartMs >= 0L)
+        require(clip.trimEndMs <= clip.durationMs)
+        require(clip.trimEndMs - clip.trimStartMs >= VideoLayoutMath.MinTrimDurationMs)
+        require(clip.rotationDegrees % 90 == 0)
+        require(clip.frameRate == null || clip.frameRate.isFinite() && clip.frameRate > 0f)
+        require(clip.sizeBytes == null || clip.sizeBytes >= 0L)
+    }
+
+    private fun String.optionalLongStrict(): Long? =
+        if (isBlank()) null else requireNotNull(toLongOrNull())
+
+    private fun String.optionalFloatStrict(): Float? =
+        if (isBlank()) null else requireNotNull(toFloatOrNull()).also { require(it.isFinite()) }
+
+    private fun String.toDurationModeStrict(): MediaDurationMode =
         when (this) {
             "LONGEST_FREEZE_SHORTER" -> MediaDurationMode.FREEZE_SHORTER
             "SHORTEST" -> MediaDurationMode.STOP_AT_SHORTEST
-            else -> enumValues<MediaDurationMode>().firstOrNull { it.name == this } ?: MediaDurationMode.LOOP_SHORTER
+            else -> enumValueStrict(this)
         }
 
     private inline fun <reified T : Enum<T>> enumValueOrDefault(name: String, default: T): T =
         enumValues<T>().firstOrNull { it.name == name } ?: default
+
+    private inline fun <reified T : Enum<T>> enumValueStrict(name: String): T =
+        requireNotNull(enumValues<T>().firstOrNull { it.name == name })
 
     private fun String.urlEncode(): String = URLEncoder.encode(this, Charsets.UTF_8.name())
 
@@ -306,5 +447,12 @@ class VideoProjectStore(
         const val TypeImage = "image"
         const val TypeVideo = "video"
         const val LegacySequenceMergeMode = "SEQUENCE"
+        const val ProjectTypeVideo = "VIDEO"
+        const val DefaultProjectName = "Video project"
+        const val ProjectFormatVersion = 1
+        const val LayoutVersion = 1
+        const val MinimumMediaFieldCount = 19
+        const val ImageMediaFieldCount = 23
+        const val LegacyClipFieldCount = 17
     }
 }

@@ -1,15 +1,10 @@
 package com.rameshta.splitframe.domain
 
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
-
-enum class SingleImageResizePreset {
-    LongEdge1080,
-    LongEdge2K,
-    LongEdge4K,
-    Scale2x,
-    Scale4x,
-    Custom,
-}
 
 enum class SingleImageOutputFormat(
     val mimeType: String,
@@ -24,10 +19,59 @@ enum class SingleImageOutputFormat(
 data class SingleImageResizeRequest(
     val preset: SingleImageResizePreset = SingleImageResizePreset.Scale2x,
     val outputFormat: SingleImageOutputFormat = SingleImageOutputFormat.Jpeg,
-    val jpegQuality: Int = 94,
+    val encodingQuality: Int = 94,
     val customWidthPx: Int? = null,
     val customHeightPx: Int? = null,
     val lockAspectRatio: Boolean = true,
+    val contentMode: ExportContentMode = ExportContentMode.Fit,
+    val deviceWallpaperDimensions: ImageDimensions? = null,
+)
+
+enum class ExportContentMode {
+    Fit,
+    Fill,
+}
+
+data class SingleImageExportSettings(
+    val preset: SingleImageResizePreset = SingleImageResizePreset.Scale2x,
+    val outputFormat: SingleImageOutputFormat = SingleImageOutputFormat.Jpeg,
+    val encodingQuality: Int = 94,
+    val customWidthPx: Int? = null,
+    val customHeightPx: Int? = null,
+    val lockAspectRatio: Boolean = true,
+    val contentMode: ExportContentMode = ExportContentMode.Fit,
+) {
+    fun toRequest(deviceWallpaperDimensions: ImageDimensions? = null): SingleImageResizeRequest =
+        SingleImageResizeRequest(
+            preset = preset,
+            outputFormat = outputFormat,
+            encodingQuality = encodingQuality,
+            customWidthPx = customWidthPx,
+            customHeightPx = customHeightPx,
+            lockAspectRatio = lockAspectRatio,
+            contentMode = contentMode,
+            deviceWallpaperDimensions = deviceWallpaperDimensions,
+        )
+
+    companion object {
+        fun from(request: SingleImageResizeRequest): SingleImageExportSettings =
+            SingleImageExportSettings(
+                preset = request.preset,
+                outputFormat = request.outputFormat,
+                encodingQuality = request.encodingQuality,
+                customWidthPx = request.customWidthPx,
+                customHeightPx = request.customHeightPx,
+                lockAspectRatio = request.lockAspectRatio,
+                contentMode = request.contentMode,
+            )
+    }
+}
+
+data class SingleImageCanvasGeometry(
+    val sourceRect: NormalizedRect,
+    val destinationRect: NormalizedRect,
+    val cropsContent: Boolean,
+    val addsPadding: Boolean,
 )
 
 data class SingleImageResizePlan(
@@ -35,11 +79,76 @@ data class SingleImageResizePlan(
     val outputDimensions: ImageDimensions,
     val estimatedBytes: Long,
     val isUpscale: Boolean,
-    val warning: SingleImageResizeWarning? = null,
-)
+    val canvasGeometry: SingleImageCanvasGeometry = SingleImageCanvasMath.geometry(
+        source = originalDimensions,
+        canvas = outputDimensions,
+        contentMode = ExportContentMode.Fit,
+    ),
+    val warnings: Set<SingleImageResizeWarning> = emptySet(),
+) {
+    val canvasAspectRatio: Float
+        get() = outputDimensions.widthPx / outputDimensions.heightPx.toFloat()
+
+    val warning: SingleImageResizeWarning?
+        get() = warnings.firstOrNull()
+}
+
+data class SingleImageOutputMetadata(
+    val originalDimensions: ImageDimensions,
+    val outputDimensions: ImageDimensions,
+    val originalBytes: Long?,
+    val outputBytes: Long?,
+    val outputFormat: SingleImageOutputFormat,
+    val encodingQuality: Int?,
+    val contentMode: ExportContentMode,
+) {
+    val comparison: SingleImageComparisonStats
+        get() = SingleImageComparisonMath.calculate(originalBytes, outputBytes)
+}
+
+fun SingleImageOutputMetadata.matches(
+    plan: SingleImageResizePlan,
+    request: SingleImageResizeRequest,
+): Boolean =
+    originalDimensions == plan.originalDimensions &&
+        outputDimensions == plan.outputDimensions &&
+        outputFormat == request.outputFormat &&
+        encodingQuality == request.encodingQuality.takeUnless {
+            request.outputFormat == SingleImageOutputFormat.Png
+        } &&
+        contentMode == request.contentMode
+
+data class SingleImageComparisonStats(
+    val originalBytes: Long?,
+    val outputBytes: Long?,
+    val bytesSaved: Long?,
+    val percentageReduction: Int?,
+) {
+    val reduced: Boolean
+        get() = bytesSaved != null && bytesSaved >= 0L
+}
+
+object SingleImageComparisonMath {
+    fun calculate(originalBytes: Long?, outputBytes: Long?): SingleImageComparisonStats {
+        val validOriginal = originalBytes?.takeIf { it > 0L }
+        val validOutput = outputBytes?.takeIf { it >= 0L }
+        val saved = if (validOriginal != null && validOutput != null) validOriginal - validOutput else null
+        val percentage = if (saved != null && validOriginal != null) {
+            ((saved * 100.0) / validOriginal).roundToInt()
+        } else {
+            null
+        }
+        return SingleImageComparisonStats(
+            originalBytes = validOriginal,
+            outputBytes = validOutput,
+            bytesSaved = saved,
+            percentageReduction = percentage,
+        )
+    }
+}
 
 enum class SingleImageResizeWarning {
-    AspectRatioUnlocked,
+    ContentCropped,
     LargeOutput,
     WouldDownscale,
 }
@@ -51,7 +160,105 @@ sealed interface SingleImagePlanResult {
 
 enum class SingleImagePlanError {
     InvalidDimensions,
+    InvalidOutputDimensions,
+    DeviceWallpaperUnavailable,
     OutputTooLarge,
+}
+
+object SingleImageCanvasMath {
+    fun geometry(
+        source: ImageDimensions,
+        canvas: ImageDimensions,
+        contentMode: ExportContentMode,
+    ): SingleImageCanvasGeometry {
+        require(source.widthPx > 0 && source.heightPx > 0)
+        require(canvas.widthPx > 0 && canvas.heightPx > 0)
+        val sourceAspect = source.widthPx / source.heightPx.toFloat()
+        val canvasAspect = canvas.widthPx / canvas.heightPx.toFloat()
+        if (abs(sourceAspect - canvasAspect) <= AspectTolerance) {
+            return SingleImageCanvasGeometry(
+                sourceRect = NormalizedRect.Full,
+                destinationRect = NormalizedRect.Full,
+                cropsContent = false,
+                addsPadding = false,
+            )
+        }
+
+        return when (contentMode) {
+            ExportContentMode.Fit -> {
+                val destination = if (sourceAspect > canvasAspect) {
+                    val height = canvasAspect / sourceAspect
+                    NormalizedRect(0f, (1f - height) / 2f, 1f, height)
+                } else {
+                    val width = sourceAspect / canvasAspect
+                    NormalizedRect((1f - width) / 2f, 0f, width, 1f)
+                }
+                SingleImageCanvasGeometry(
+                    sourceRect = NormalizedRect.Full,
+                    destinationRect = destination,
+                    cropsContent = false,
+                    addsPadding = true,
+                )
+            }
+            ExportContentMode.Fill -> {
+                val sourceRect = if (sourceAspect > canvasAspect) {
+                    val width = canvasAspect / sourceAspect
+                    NormalizedRect((1f - width) / 2f, 0f, width, 1f)
+                } else {
+                    val height = sourceAspect / canvasAspect
+                    NormalizedRect(0f, (1f - height) / 2f, 1f, height)
+                }
+                SingleImageCanvasGeometry(
+                    sourceRect = sourceRect,
+                    destinationRect = NormalizedRect.Full,
+                    cropsContent = true,
+                    addsPadding = false,
+                )
+            }
+        }
+    }
+
+    fun contentScale(
+        source: ImageDimensions,
+        canvas: ImageDimensions,
+        contentMode: ExportContentMode,
+    ): Float {
+        require(source.widthPx > 0 && source.heightPx > 0)
+        require(canvas.widthPx > 0 && canvas.heightPx > 0)
+        val widthScale = canvas.widthPx / source.widthPx.toFloat()
+        val heightScale = canvas.heightPx / source.heightPx.toFloat()
+        return when (contentMode) {
+            ExportContentMode.Fit -> min(widthScale, heightScale)
+            ExportContentMode.Fill -> max(widthScale, heightScale)
+        }
+    }
+
+    private const val AspectTolerance = 0.0001f
+}
+
+object SingleImageDecodeMath {
+    fun targetLongEdgePx(
+        original: ImageDimensions,
+        output: ImageDimensions,
+        geometry: SingleImageCanvasGeometry,
+    ): Int {
+        require(original.widthPx > 0 && original.heightPx > 0)
+        require(output.widthPx > 0 && output.heightPx > 0)
+        val sourceCropWidth = original.widthPx * geometry.sourceRect.width
+        val sourceCropHeight = original.heightPx * geometry.sourceRect.height
+        val destinationWidth = output.widthPx * geometry.destinationRect.width
+        val destinationHeight = output.heightPx * geometry.destinationRect.height
+        val requiredScale = max(
+            destinationWidth / sourceCropWidth.coerceAtLeast(1f),
+            destinationHeight / sourceCropHeight.coerceAtLeast(1f),
+        ).coerceAtMost(1f)
+        val requiredLongEdge = ceil(original.longEdgePx * requiredScale).toInt().coerceAtLeast(1)
+        return minOf(
+            original.longEdgePx,
+            requiredLongEdge,
+            SingleImageResizePlanner.MaxOutputLongEdgePx,
+        )
+    }
 }
 
 object SingleImageResizePlanner {
@@ -65,29 +272,45 @@ object SingleImageResizePlanner {
         if (original.widthPx <= 0 || original.heightPx <= 0) {
             return SingleImagePlanResult.Invalid(SingleImagePlanError.InvalidDimensions)
         }
-        val output = outputDimensions(original, request)
+        val definition = ExportPresetCatalog.definition(request.preset)
+        if (
+            definition.canvasRule == ExportCanvasRule.DeviceWallpaper &&
+            request.deviceWallpaperDimensions == null
+        ) {
+            return SingleImagePlanResult.Invalid(SingleImagePlanError.DeviceWallpaperUnavailable)
+        }
+        val output = outputDimensions(original, request, definition.canvasRule)
+        if (
+            definition.canvasRule == ExportCanvasRule.Custom &&
+            request.lockAspectRatio &&
+            request.customWidthPx != null &&
+            request.customHeightPx != null
+        ) {
+            return SingleImagePlanResult.Invalid(SingleImagePlanError.InvalidOutputDimensions)
+        }
         if (output.widthPx <= 0 || output.heightPx <= 0) {
-            return SingleImagePlanResult.Invalid(SingleImagePlanError.InvalidDimensions)
+            return SingleImagePlanResult.Invalid(SingleImagePlanError.InvalidOutputDimensions)
         }
         if (output.longEdgePx > MaxOutputLongEdgePx || output.widthPx.toLong() * output.heightPx > MaxOutputPixels) {
             return SingleImagePlanResult.Invalid(SingleImagePlanError.OutputTooLarge)
         }
 
-        val originalPixels = original.widthPx.toLong() * original.heightPx
         val outputPixels = output.widthPx.toLong() * output.heightPx
-        val warning = when {
-            !request.lockAspectRatio -> SingleImageResizeWarning.AspectRatioUnlocked
-            outputPixels < originalPixels -> SingleImageResizeWarning.WouldDownscale
-            outputPixels > 16_000_000 -> SingleImageResizeWarning.LargeOutput
-            else -> null
+        val geometry = SingleImageCanvasMath.geometry(original, output, request.contentMode)
+        val contentScale = SingleImageCanvasMath.contentScale(original, output, request.contentMode)
+        val warnings = buildSet {
+            if (geometry.cropsContent) add(SingleImageResizeWarning.ContentCropped)
+            if (contentScale < 1f - ScaleTolerance) add(SingleImageResizeWarning.WouldDownscale)
+            if (outputPixels > 16_000_000) add(SingleImageResizeWarning.LargeOutput)
         }
         return SingleImagePlanResult.Valid(
             SingleImageResizePlan(
                 originalDimensions = original,
                 outputDimensions = output,
-                estimatedBytes = estimatedBytes(output, request.outputFormat, request.jpegQuality),
-                isUpscale = outputPixels > originalPixels,
-                warning = warning,
+                canvasGeometry = geometry,
+                estimatedBytes = estimatedBytes(output, request.outputFormat, request.encodingQuality),
+                isUpscale = contentScale > 1f + ScaleTolerance,
+                warnings = warnings,
             ),
         )
     }
@@ -95,15 +318,21 @@ object SingleImageResizePlanner {
     private fun outputDimensions(
         original: ImageDimensions,
         request: SingleImageResizeRequest,
+        canvasRule: ExportCanvasRule,
     ): ImageDimensions =
-        when (request.preset) {
-            SingleImageResizePreset.LongEdge1080 -> dimensionsForLongEdge(original, 1080)
-            SingleImageResizePreset.LongEdge2K -> dimensionsForLongEdge(original, 2560)
-            SingleImageResizePreset.LongEdge4K -> dimensionsForLongEdge(original, 3840)
-            SingleImageResizePreset.Scale2x -> ImageDimensions(original.widthPx * 2, original.heightPx * 2)
-            SingleImageResizePreset.Scale4x -> ImageDimensions(original.widthPx * 4, original.heightPx * 4)
-            SingleImageResizePreset.Custom -> customDimensions(original, request)
+        when (canvasRule) {
+            is ExportCanvasRule.Fixed -> canvasRule.dimensions
+            is ExportCanvasRule.OriginalLongEdge -> dimensionsForLongEdge(original, canvasRule.longEdgePx)
+            is ExportCanvasRule.OriginalScale -> ImageDimensions(
+                safeScale(original.widthPx, canvasRule.factor),
+                safeScale(original.heightPx, canvasRule.factor),
+            )
+            ExportCanvasRule.DeviceWallpaper -> request.deviceWallpaperDimensions ?: ImageDimensions(0, 0)
+            ExportCanvasRule.Custom -> customDimensions(original, request)
         }
+
+    private fun safeScale(value: Int, factor: Int): Int =
+        (value.toLong() * factor.toLong()).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
 
     private fun dimensionsForLongEdge(original: ImageDimensions, longEdge: Int): ImageDimensions {
         val scale = longEdge / original.longEdgePx.toFloat()
@@ -117,35 +346,45 @@ object SingleImageResizePlanner {
         original: ImageDimensions,
         request: SingleImageResizeRequest,
     ): ImageDimensions {
-        val requestedWidth = request.customWidthPx ?: original.widthPx
-        val requestedHeight = request.customHeightPx ?: original.heightPx
         if (!request.lockAspectRatio) {
-            return ImageDimensions(requestedWidth, requestedHeight)
+            return ImageDimensions(
+                request.customWidthPx ?: 0,
+                request.customHeightPx ?: 0,
+            )
         }
         val aspectRatio = original.widthPx / original.heightPx.toFloat()
-        return if (request.customWidthPx != null) {
-            ImageDimensions(
-                widthPx = requestedWidth,
-                heightPx = (requestedWidth / aspectRatio).roundToInt().coerceAtLeast(1),
-            )
-        } else {
-            ImageDimensions(
-                widthPx = (requestedHeight * aspectRatio).roundToInt().coerceAtLeast(1),
-                heightPx = requestedHeight,
-            )
+        return when {
+            request.customWidthPx != null -> {
+                val requestedWidth = request.customWidthPx
+                ImageDimensions(
+                    widthPx = requestedWidth,
+                    heightPx = (requestedWidth / aspectRatio).roundToInt().coerceAtLeast(1),
+                )
+            }
+            request.customHeightPx != null -> {
+                val requestedHeight = request.customHeightPx
+                ImageDimensions(
+                    widthPx = (requestedHeight * aspectRatio).roundToInt().coerceAtLeast(1),
+                    heightPx = requestedHeight,
+                )
+            }
+            else -> ImageDimensions(0, 0)
         }
     }
 
     fun estimatedBytes(
         dimensions: ImageDimensions,
         format: SingleImageOutputFormat,
-        jpegQuality: Int,
+        encodingQuality: Int,
     ): Long {
         val pixels = dimensions.widthPx.toLong() * dimensions.heightPx
         return when (format) {
-            SingleImageOutputFormat.Jpeg -> (pixels * (0.22f + jpegQuality.coerceIn(60, 100) / 100f)).toLong()
+            SingleImageOutputFormat.Jpeg -> (pixels * (0.22f + encodingQuality.coerceIn(60, 100) / 100f)).toLong()
             SingleImageOutputFormat.Png -> pixels * 3L
-            SingleImageOutputFormat.Webp -> (pixels * 0.85f).toLong()
+            SingleImageOutputFormat.Webp ->
+                (pixels * (0.35f + encodingQuality.coerceIn(60, 100) / 200f)).toLong()
         }.coerceAtLeast(64_000L)
     }
+
+    private const val ScaleTolerance = 0.0001f
 }

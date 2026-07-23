@@ -75,6 +75,10 @@ data class MergeProject(
     val exportResolution: ExportResolution = ExportResolution.FHD_1080,
     val beforeAfterSlider: Float = 0.5f,
     val backgroundGradient: CollageGradient = CollageGradient.Neutral,
+    val backgroundStyle: CollageBackgroundStyle = CollageBackgroundStyle(),
+    val borderStyle: CollageBorderStyle = CollageBorderStyle(),
+    val cropShapes: Map<Int, CropShape> = emptyMap(),
+    val textLayers: List<CollageTextLayer> = emptyList(),
 ) {
     val isReadyForImageExport: Boolean
         get() = assignedImages.isNotEmpty() &&

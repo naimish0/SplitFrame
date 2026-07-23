@@ -166,6 +166,15 @@ data class VideoExportEstimate(
     val encoderSupported: Boolean,
 )
 
+data class MergedVideoTimelinePosition(
+    val clipIndex: Int,
+    val clip: VideoClip,
+    val positionInTrimMs: Long,
+) {
+    val sourcePositionMs: Long
+        get() = clip.trimStartMs + positionInTrimMs.coerceIn(0L, clip.trimmedDurationMs)
+}
+
 object MixedMediaLimits {
     const val MinItems = 2
     const val MaxItems = Int.MAX_VALUE
@@ -322,7 +331,44 @@ object VideoLayoutMath {
         )
 
     fun outputDurationForMergedVideos(clips: Collection<VideoClip>): Long =
-        clips.sumOf { clip -> clip.trimmedDurationMs.coerceAtLeast(0L) }
+        clips.fold(0L) { total, clip ->
+            total.saturatedAdd(clip.trimmedDurationMs.coerceAtLeast(0L))
+        }
+
+    fun mergedVideoPositionAt(
+        clips: List<VideoClip>,
+        projectPositionMs: Long,
+    ): MergedVideoTimelinePosition? {
+        val playableClips = clips.withIndex().filter { (_, clip) -> clip.trimmedDurationMs > 0L }
+        if (playableClips.isEmpty()) return null
+
+        var remainingMs = projectPositionMs.coerceAtLeast(0L)
+        playableClips.forEachIndexed { playableIndex, indexedClip ->
+            val durationMs = indexedClip.value.trimmedDurationMs
+            val isLast = playableIndex == playableClips.lastIndex
+            if (remainingMs < durationMs || isLast) {
+                return MergedVideoTimelinePosition(
+                    clipIndex = indexedClip.index,
+                    clip = indexedClip.value,
+                    positionInTrimMs = remainingMs.coerceIn(0L, durationMs),
+                )
+            }
+            remainingMs -= durationMs
+        }
+        return null
+    }
+
+    fun mergedVideoClipStartMs(
+        clips: List<VideoClip>,
+        clipIndex: Int,
+    ): Long? {
+        if (clipIndex !in clips.indices || clips[clipIndex].trimmedDurationMs <= 0L) return null
+        return clips
+            .take(clipIndex)
+            .fold(0L) { total, clip ->
+                total.saturatedAdd(clip.trimmedDurationMs.coerceAtLeast(0L))
+            }
+    }
 
     fun freezeDurationMs(clip: VideoClip, outputDurationMs: Long): Long =
         (outputDurationMs - clip.trimmedDurationMs).coerceAtLeast(0L)
@@ -393,6 +439,9 @@ object VideoLayoutMath {
 
     private fun Long.floorMod(divisor: Long): Long =
         ((this % divisor) + divisor) % divisor
+
+    private fun Long.saturatedAdd(value: Long): Long =
+        if (value > Long.MAX_VALUE - this) Long.MAX_VALUE else this + value
 
     private fun Int.even(): Int = if (this % 2 == 0) this else this + 1
 

@@ -3,6 +3,7 @@ package com.rameshta.splitframe.domain
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 data class NormalizedRect(
     val x: Float,
@@ -44,6 +45,13 @@ data class ImageDimensions(
     val longEdgePx: Int get() = max(widthPx, heightPx)
 }
 
+data class CollageRenderMetrics(
+    val spacingPx: Float,
+    val cornerRadiusPx: Float,
+    val borderWidthPx: Float,
+    val dividerWidthPx: Float,
+)
+
 object LayoutMath {
     fun cellFrame(
         cell: LayoutCell,
@@ -55,21 +63,53 @@ object LayoutMath {
         val baseTop = cell.rect.y * outputHeightPx
         val baseRight = cell.rect.right * outputWidthPx
         val baseBottom = cell.rect.bottom * outputHeightPx
-        val outerGap = spacingPx
-        val innerGap = spacingPx / 2f
+        val safeSpacing = spacingPx.coerceAtLeast(0f)
+        val outerGap = safeSpacing
+        val innerGap = safeSpacing / 2f
 
         val leftInset = if (cell.rect.x <= 0f) outerGap else innerGap
         val topInset = if (cell.rect.y <= 0f) outerGap else innerGap
         val rightInset = if (cell.rect.right >= 1f) outerGap else innerGap
         val bottomInset = if (cell.rect.bottom >= 1f) outerGap else innerGap
+        val horizontalScale = insetScale(baseRight - baseLeft, leftInset, rightInset)
+        val verticalScale = insetScale(baseBottom - baseTop, topInset, bottomInset)
+        val left = min(baseRight, baseLeft + leftInset * horizontalScale)
+        val top = min(baseBottom, baseTop + topInset * verticalScale)
 
         return RectPx(
-            left = min(baseRight, baseLeft + leftInset),
-            top = min(baseBottom, baseTop + topInset),
-            right = max(baseLeft, baseRight - rightInset),
-            bottom = max(baseTop, baseBottom - bottomInset),
+            left = left,
+            top = top,
+            right = max(left, baseRight - rightInset * horizontalScale),
+            bottom = max(top, baseBottom - bottomInset * verticalScale),
         )
     }
+
+    /**
+     * Maps legacy dp-named editor values into a canvas-relative coordinate system.
+     * The preview fills the available width, so a canonical 360-unit width keeps
+     * preview and exported effects proportional at every output resolution.
+     */
+    fun collageRenderMetrics(
+        canvasWidthPx: Float,
+        spacingDp: Float,
+        cornerRadiusDp: Float,
+        borderWidthDp: Float,
+    ): CollageRenderMetrics {
+        val scale = canvasWidthPx.coerceAtLeast(0f) / CollageReferenceWidth
+        fun scaled(value: Float): Float = value.coerceAtLeast(0f) * scale
+        return CollageRenderMetrics(
+            spacingPx = scaled(spacingDp),
+            cornerRadiusPx = scaled(cornerRadiusDp),
+            borderWidthPx = scaled(borderWidthDp),
+            dividerWidthPx = scaled(BeforeAfterDividerWidth),
+        )
+    }
+
+    fun beforeAfterDividerX(canvasWidthPx: Float, position: Float): Float =
+        canvasWidthPx.coerceAtLeast(0f) * position.coerceIn(
+            BeforeAfterMinimumPosition,
+            BeforeAfterMaximumPosition,
+        )
 
     fun cropToFillSourceRect(
         sourceWidthPx: Float,
@@ -225,7 +265,7 @@ object LayoutMath {
             ExportResolution.FHD_1080.longEdgePx
         }
         val aspectRatio = template.aspectRatio.coerceAtLeast(0.1f)
-        return if (aspectRatio >= 1f) {
+        return clampOutputPixels(if (aspectRatio >= 1f) {
             OutputSize(
                 widthPx = longEdge,
                 heightPx = (longEdge / aspectRatio).roundToInt().coerceAtLeast(1),
@@ -235,7 +275,7 @@ object LayoutMath {
                 widthPx = (longEdge * aspectRatio).roundToInt().coerceAtLeast(1),
                 heightPx = longEdge,
             )
-        }
+        })
     }
 
     fun estimatedJpegSizeBytes(size: OutputSize): Long {
@@ -262,10 +302,41 @@ object LayoutMath {
         }
 
         val longEdge = requiredLongEdge.roundToInt().coerceIn(480, 8192)
-        return if (aspectRatio >= 1f) {
+        return clampOutputPixels(if (aspectRatio >= 1f) {
             OutputSize(longEdge, (longEdge / aspectRatio).roundToInt().coerceAtLeast(1))
         } else {
             OutputSize((longEdge * aspectRatio).roundToInt().coerceAtLeast(1), longEdge)
+        })
+    }
+
+    private fun clampOutputPixels(size: OutputSize): OutputSize {
+        val pixels = size.widthPx.toLong() * size.heightPx.toLong()
+        if (pixels <= MaxPhotoOutputPixels) return size
+        val scale = sqrt(MaxPhotoOutputPixels / pixels.toDouble())
+        return OutputSize(
+            widthPx = (size.widthPx * scale).toInt().coerceAtLeast(1),
+            heightPx = (size.heightPx * scale).toInt().coerceAtLeast(1),
+        )
+    }
+
+    private fun insetScale(
+        extent: Float,
+        startInset: Float,
+        endInset: Float,
+    ): Float {
+        val requestedInset = startInset + endInset
+        val maximumInset = extent.coerceAtLeast(0f) * (1f - MinimumCellExtentFraction)
+        return if (requestedInset > maximumInset && requestedInset > 0f) {
+            maximumInset / requestedInset
+        } else {
+            1f
         }
     }
+
+    private const val CollageReferenceWidth = 360f
+    internal const val MaxPhotoOutputPixels = 24_000_000L
+    private const val BeforeAfterDividerWidth = 4f
+    private const val BeforeAfterMinimumPosition = 0.05f
+    private const val BeforeAfterMaximumPosition = 0.95f
+    private const val MinimumCellExtentFraction = 0.05f
 }

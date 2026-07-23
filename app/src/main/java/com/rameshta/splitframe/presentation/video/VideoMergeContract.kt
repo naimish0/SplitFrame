@@ -98,9 +98,9 @@ sealed interface VideoMergeResultEvent {
     data object Paused : VideoMergeResultEvent
     data class Seeked(val positionMs: Long) : VideoMergeResultEvent
     data class ExportQueued(val workId: String?) : VideoMergeResultEvent
-    data class ExportProgressChanged(val progress: Float) : VideoMergeResultEvent
-    data class ExportFinished(val result: ExportResult) : VideoMergeResultEvent
-    data object ExportCancelled : VideoMergeResultEvent
+    data class ExportProgressChanged(val workId: String?, val progress: Float) : VideoMergeResultEvent
+    data class ExportFinished(val workId: String?, val result: ExportResult) : VideoMergeResultEvent
+    data class ExportCancelled(val workId: String?) : VideoMergeResultEvent
     data class Failed(@StringRes val messageRes: Int) : VideoMergeResultEvent
     data object ErrorCleared : VideoMergeResultEvent
     data object ExportResultDismissed : VideoMergeResultEvent
@@ -120,6 +120,7 @@ enum class VideoEditorStatus {
     ExportCompleted,
     ExportFailed,
     ExportCancelled,
+    ProjectUnavailable,
     RecoverableMediaError,
     UnsupportedMedia,
     InsufficientStorage,

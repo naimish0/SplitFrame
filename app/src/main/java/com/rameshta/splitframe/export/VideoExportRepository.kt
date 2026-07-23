@@ -2,6 +2,8 @@ package com.rameshta.splitframe.export
 
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -30,14 +32,21 @@ import com.rameshta.splitframe.domain.VideoClip
 import com.rameshta.splitframe.domain.VideoLayoutMath
 import com.rameshta.splitframe.domain.VideoMergeProject
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
@@ -47,7 +56,8 @@ class VideoExportRepository(
 ) {
     suspend fun export(
         project: VideoMergeProject,
-        onProgress: (Float) -> Unit,
+        onProgress: (Float) -> Boolean,
+        onPublished: suspend (String) -> Boolean,
     ): ExportResult =
         withContext(Dispatchers.IO) {
             val outputSize = VideoLayoutMath.outputSizeForMedia(
@@ -59,14 +69,16 @@ class VideoExportRepository(
             try {
                 val composition = buildComposition(project, outputSize)
                 runTransformer(composition, tempFile, onProgress)
-                val savedUri = publishToMediaStore(tempFile)
+                val savedUri = publishToMediaStore(tempFile, onProgress, onPublished)
                 ExportResult.Success(savedUri.toString())
+            } catch (cancellation: CancellationException) {
+                throw cancellation
             } catch (oom: OutOfMemoryError) {
                 ExportResult.Failure("Not enough memory to export this video.")
             } catch (throwable: Throwable) {
-                ExportResult.Failure(throwable.message ?: "Video export failed.")
+                ExportResult.Failure(videoExportFailureMessage(throwable))
             } finally {
-                tempFile.delete()
+                runCatching { tempFile.delete() }
             }
         }
 
@@ -146,7 +158,7 @@ class VideoExportRepository(
     private suspend fun runTransformer(
         composition: Composition,
         outputFile: File,
-        onProgress: (Float) -> Unit,
+        onProgress: (Float) -> Boolean,
     ) {
         suspendCancellableCoroutine { continuation ->
             val thread = HandlerThread("SplitFrameVideoExport")
@@ -176,7 +188,7 @@ class VideoExportRepository(
                         .setAudioMimeType(MimeTypes.AUDIO_AAC)
                         .setEncoderFactory(
                             DefaultEncoderFactory.Builder(context)
-                                .setEnableFallback(false)
+                                .setEnableFallback(VideoEncoderFallbackEnabled)
                                 .build(),
                         )
                         .addListener(
@@ -201,7 +213,22 @@ class VideoExportRepository(
                         )
                         .build()
                     transformer?.start(composition, outputFile.absolutePath)
-                    pollProgress(handler, transformer, onProgress, ::closeThread)
+                    pollProgress(
+                        handler = handler,
+                        transformer = transformer,
+                        onProgress = onProgress,
+                        onCancelled = {
+                            if (continuation.isActive) {
+                                continuation.cancel(CancellationException("Video export was superseded."))
+                            }
+                        },
+                        onFailure = { throwable ->
+                            transformer?.cancel()
+                            if (continuation.isActive) continuation.resumeWithException(throwable)
+                            closeThread()
+                        },
+                        onDone = ::closeThread,
+                    )
                 } catch (throwable: Throwable) {
                     if (continuation.isActive) continuation.resumeWithException(throwable)
                     closeThread()
@@ -213,31 +240,72 @@ class VideoExportRepository(
     private fun pollProgress(
         handler: Handler,
         transformer: Transformer?,
-        onProgress: (Float) -> Unit,
+        onProgress: (Float) -> Boolean,
+        onCancelled: () -> Unit,
+        onFailure: (Throwable) -> Unit,
         onDone: () -> Unit,
     ) {
         val activeTransformer = transformer ?: return
         val holder = ProgressHolder()
         val state = activeTransformer.getProgress(holder)
         if (state == Transformer.PROGRESS_STATE_AVAILABLE) {
-            onProgress(holder.progress.coerceIn(0, 100) / 100f)
+            val shouldContinue = try {
+                onProgress(holder.progress.coerceIn(0, 100) / 100f)
+            } catch (throwable: Throwable) {
+                onFailure(throwable)
+                return
+            }
+            if (!shouldContinue) {
+                onCancelled()
+                return
+            }
         }
         if (state == Transformer.PROGRESS_STATE_NOT_STARTED) {
             onDone()
         } else {
             handler.postDelayed(
-                { pollProgress(handler, activeTransformer, onProgress, onDone) },
+                {
+                    pollProgress(
+                        handler,
+                        activeTransformer,
+                        onProgress,
+                        onCancelled,
+                        onFailure,
+                        onDone,
+                    )
+                },
                 ProgressPollMs,
             )
         }
     }
 
     private fun createTempOutputFile(projectId: String): File {
-        val dir = File(context.cacheDir, "video_exports").apply { mkdirs() }
-        return File(dir, "${projectId}_${System.currentTimeMillis()}.mp4")
+        val dir = File(context.cacheDir, "video_exports")
+        check((dir.isDirectory || dir.mkdirs()) && dir.isDirectory) {
+            "Could not create temporary video workspace."
+        }
+        cleanupStaleVideoExportFiles(
+            directory = dir,
+            olderThanMillis = System.currentTimeMillis() - StaleTempFileAgeMillis,
+        )
+        return File(dir, "${projectId}_${UUID.randomUUID()}.mp4")
     }
 
-    private fun publishToMediaStore(tempFile: File): Uri {
+    private suspend fun publishToMediaStore(
+        tempFile: File,
+        onProgress: (Float) -> Boolean,
+        onPublished: suspend (String) -> Boolean,
+    ): Uri {
+        val expectedBytes = tempFile.requirePlayableVideoOutputSize()
+        val processingContext = currentCoroutineContext()
+        fun ensureCurrentExport() {
+            processingContext.ensureActive()
+            if (!onProgress(1f)) {
+                throw CancellationException("Video export was superseded during publication.")
+            }
+        }
+        ensureCurrentExport()
+
         val resolver = context.contentResolver
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val values = ContentValues().apply {
@@ -248,19 +316,39 @@ class VideoExportRepository(
                 put(MediaStore.Video.Media.IS_PENDING, 1)
             }
         }
-        val uri = requireNotNull(resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)) {
-            "Could not create MediaStore video."
-        }
-        resolver.openOutputStream(uri)?.use { output ->
-            tempFile.inputStream().use { input -> input.copyTo(output) }
-        } ?: error("Could not open MediaStore output.")
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.clear()
-            values.put(MediaStore.Video.Media.IS_PENDING, 0)
-            resolver.update(uri, values, null, null)
-        }
-        return uri
+        return transactionalVideoPublication(
+            insert = { resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values) },
+            write = { uri ->
+                resolver.openOutputStream(uri)?.use { output ->
+                    tempFile.inputStream().use { input ->
+                        copyVideoOutput(
+                            input = input,
+                            output = output,
+                            expectedBytes = expectedBytes,
+                            ensureActive = processingContext::ensureActive,
+                        )
+                    }
+                } ?: error("Could not open MediaStore output.")
+            },
+            beforePublish = ::ensureCurrentExport,
+            publish = { uri ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val publishValues = ContentValues().apply {
+                        put(MediaStore.Video.Media.IS_PENDING, 0)
+                    }
+                    check(resolver.update(uri, publishValues, null, null) == 1) {
+                        "Could not publish MediaStore video."
+                    }
+                }
+            },
+            commit = { uri ->
+                commitVideoPublication(
+                    ensureActive = processingContext::ensureActive,
+                    commit = { onPublished(uri.toString()) },
+                )
+            },
+            rollback = { uri -> resolver.delete(uri, null, null) > 0 },
+        )
     }
 
     private fun Int.even(): Int = if (this % 2 == 0) this else this + 1
@@ -268,5 +356,133 @@ class VideoExportRepository(
     private companion object {
         const val ProgressPollMs = 500L
         const val MinVideoMergeClipCount = 2
+        const val StaleTempFileAgeMillis = 24L * 60L * 60L * 1_000L
     }
 }
+
+internal fun cleanupStaleVideoExportFiles(
+    directory: File,
+    olderThanMillis: Long,
+): Int = directory.listFiles()
+    ?.asSequence()
+    ?.filter { file -> file.isFile && file.extension.equals("mp4", ignoreCase = true) }
+    ?.filter { file -> file.lastModified() in 1 until olderThanMillis }
+    ?.count(File::delete)
+    ?: 0
+
+internal const val VideoEncoderFallbackEnabled = false
+
+@OptIn(UnstableApi::class)
+internal fun videoExportFailureMessage(failure: Throwable): String {
+    val errorCode = (failure as? ExportException)?.errorCode
+    return videoExportErrorCodeMessage(
+        errorCode = errorCode,
+        fallback = actionableExportFailure(failure, "Video export failed."),
+    )
+}
+
+@OptIn(UnstableApi::class)
+internal fun videoExportErrorCodeMessage(errorCode: Int?, fallback: String): String =
+    when (errorCode) {
+        ExportException.ERROR_CODE_ENCODER_INIT_FAILED,
+        ExportException.ERROR_CODE_ENCODING_FAILED,
+        ExportException.ERROR_CODE_ENCODING_FORMAT_UNSUPPORTED,
+        -> "This device could not encode the video at the selected size. Try 720p or a shorter project."
+        ExportException.ERROR_CODE_DECODER_INIT_FAILED,
+        ExportException.ERROR_CODE_DECODING_FAILED,
+        ExportException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+        -> "A selected clip uses a codec this device cannot decode. Choose a different clip."
+        else -> fallback
+    }
+
+internal fun File.requireVideoOutputSize(): Long {
+    check(isFile) { "Rendered video is unavailable." }
+    return length().also { size ->
+        check(size > 0L) { "Rendered video is empty." }
+    }
+}
+
+@OptIn(UnstableApi::class)
+private fun File.requirePlayableVideoOutputSize(): Long {
+    val size = requireVideoOutputSize()
+    val extractor = MediaExtractor()
+    try {
+        extractor.setDataSource(absolutePath)
+        val videoFormats = (0 until extractor.trackCount).map { extractor.getTrackFormat(it) }
+            .filter { format -> format.getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true }
+        check(videoFormats.isNotEmpty()) { "Rendered output does not contain a playable video track." }
+        val knownDurations = videoFormats.mapNotNull { format ->
+            if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else null
+        }
+        check(knownDurations.isEmpty() || knownDurations.any { it > 0L }) {
+            "Rendered video has an invalid duration."
+        }
+    } finally {
+        extractor.release()
+    }
+    return size
+}
+
+internal fun copyVideoOutput(
+    input: InputStream,
+    output: OutputStream,
+    expectedBytes: Long,
+    ensureActive: () -> Unit,
+) {
+    check(expectedBytes > 0L) { "Rendered video is empty." }
+    val buffer = ByteArray(VideoCopyBufferBytes)
+    var copiedBytes = 0L
+    while (true) {
+        ensureActive()
+        val read = input.read(buffer)
+        if (read < 0) break
+        if (read == 0) continue
+        output.write(buffer, 0, read)
+        copiedBytes += read
+        check(copiedBytes <= expectedBytes) { "Could not copy complete video." }
+    }
+    ensureActive()
+    check(copiedBytes == expectedBytes) { "Could not copy complete video." }
+    output.flush()
+    ensureActive()
+}
+
+internal suspend fun commitVideoPublication(
+    ensureActive: () -> Unit,
+    commit: suspend () -> Boolean,
+) {
+    ensureActive()
+    withContext(NonCancellable) {
+        if (!commit()) {
+            throw CancellationException("Video export ownership changed during publication.")
+        }
+    }
+}
+
+internal suspend fun <Entry : Any> transactionalVideoPublication(
+    insert: () -> Entry?,
+    write: (Entry) -> Unit,
+    beforePublish: () -> Unit,
+    publish: (Entry) -> Unit,
+    commit: suspend (Entry) -> Unit,
+    rollback: (Entry) -> Boolean,
+): Entry {
+    val entry = insert() ?: error("Could not create MediaStore video.")
+    return try {
+        write(entry)
+        beforePublish()
+        publish(entry)
+        commit(entry)
+        entry
+    } catch (failure: Throwable) {
+        val rollbackFailure = runCatching {
+            check(rollback(entry)) { "Could not remove incomplete video." }
+        }.exceptionOrNull()
+        if (rollbackFailure != null && rollbackFailure !== failure) {
+            failure.addSuppressed(rollbackFailure)
+        }
+        throw failure
+    }
+}
+
+private const val VideoCopyBufferBytes = 64 * 1024

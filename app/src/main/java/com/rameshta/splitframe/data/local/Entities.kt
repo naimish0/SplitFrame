@@ -1,6 +1,7 @@
 package com.rameshta.splitframe.data.local
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "preferences")
@@ -22,6 +23,12 @@ data class ExportHistoryEntity(
 data class FavoriteTemplateEntity(
     @PrimaryKey val templateId: String,
     val createdAtMillis: Long,
+)
+
+@Entity(tableName = "recent_layouts")
+data class RecentLayoutEntity(
+    @PrimaryKey val templateId: String,
+    val usedAtMillis: Long,
 )
 
 @Entity(tableName = "video_projects")
@@ -54,4 +61,21 @@ data class VideoExportWorkEntity(
     val outputUri: String?,
     val errorMessage: String?,
     val updatedAtMillis: Long,
+)
+
+@Entity(
+    tableName = "recent_projects",
+    indices = [Index(value = ["deletedAtMillis", "updatedAtMillis"])],
+)
+data class RecentProjectEntity(
+    @PrimaryKey val projectId: String,
+    val projectType: String,
+    val name: String,
+    val projectFormatVersion: Int,
+    val layoutVersion: Int,
+    val thumbnailUri: String?,
+    val createdAtMillis: Long,
+    val updatedAtMillis: Long,
+    val deletedAtMillis: Long?,
+    val deletionToken: String?,
 )

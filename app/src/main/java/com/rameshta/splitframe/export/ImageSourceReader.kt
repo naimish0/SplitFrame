@@ -13,40 +13,49 @@ import kotlin.math.max
 class ImageSourceReader(
     private val contentResolver: ContentResolver,
 ) {
-    fun dimensions(source: ImageSource): ImageDimensions? {
-        val options = BitmapFactory.Options().apply {
-            inJustDecodeBounds = true
-        }
-        decode(source, options)
-        return if (options.outWidth > 0 && options.outHeight > 0) {
-            val orientation = exifOrientation(source)
-            if (orientation.swapsDimensions) {
-                ImageDimensions(options.outHeight, options.outWidth)
-            } else {
-                ImageDimensions(options.outWidth, options.outHeight)
+    fun dimensions(source: ImageSource): ImageDimensions? =
+        try {
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
             }
-        } else {
+            decode(source, options)
+            if (options.outWidth > 0 && options.outHeight > 0) {
+                val orientation = exifOrientation(source)
+                if (orientation.swapsDimensions) {
+                    ImageDimensions(options.outHeight, options.outWidth)
+                } else {
+                    ImageDimensions(options.outWidth, options.outHeight)
+                }
+            } else {
+                null
+            }
+        } catch (_: Exception) {
             null
         }
-    }
 
-    fun validate(source: ImageSource): ImageValidationResult {
-        if (!hasSupportedMimeType(source)) {
-            return ImageValidationResult.UnsupportedFormat
+    fun validate(source: ImageSource): ImageValidationResult =
+        try {
+            if (!hasSupportedMimeType(source)) {
+                ImageValidationResult.UnsupportedFormat
+            } else {
+                dimensions(source)?.let(ImageValidationResult::Valid) ?: ImageValidationResult.Unreadable
+            }
+        } catch (_: Exception) {
+            ImageValidationResult.Unreadable
         }
-        val dimensions = dimensions(source) ?: return ImageValidationResult.Unreadable
-        return ImageValidationResult.Valid(dimensions)
-    }
 
-    fun decodeBitmap(source: ImageSource, targetLongEdgePx: Int): Bitmap? {
-        val dimensions = dimensions(source) ?: return null
-        val options = BitmapFactory.Options().apply {
-            inPreferredConfig = Bitmap.Config.ARGB_8888
-            inSampleSize = sampleSize(dimensions, targetLongEdgePx)
+    fun decodeBitmap(source: ImageSource, targetLongEdgePx: Int): Bitmap? =
+        try {
+            val dimensions = dimensions(source) ?: return null
+            val options = BitmapFactory.Options().apply {
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            inSampleSize = imageDecodeSampleSize(dimensions, targetLongEdgePx)
+            }
+            val bitmap = decode(source, options) ?: return null
+            bitmap.applyOrientation(exifOrientation(source))
+        } catch (_: Exception) {
+            null
         }
-        val bitmap = decode(source, options) ?: return null
-        return bitmap.applyOrientation(exifOrientation(source))
-    }
 
     private fun decode(source: ImageSource, options: BitmapFactory.Options): Bitmap? =
         when (source) {
@@ -81,7 +90,7 @@ class ImageSourceReader(
                 ExifInterface.ORIENTATION_TRANSVERSE -> ExifOrientation.Transverse
                 else -> ExifOrientation.Normal
             }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             ExifOrientation.Normal
         }
 
@@ -103,20 +112,11 @@ class ImageSourceReader(
                 matrix.postScale(-1f, 1f)
             }
         }
-        return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true).also { rotated ->
-            if (rotated != this) recycle()
-        }
-    }
-
-    private fun sampleSize(dimensions: ImageDimensions, targetLongEdgePx: Int): Int {
-        if (targetLongEdgePx <= 0) return 1
-        var sample = 1
-        var currentLongEdge = max(dimensions.widthPx, dimensions.heightPx)
-        while (currentLongEdge / 2 >= targetLongEdgePx) {
-            sample *= 2
-            currentLongEdge /= 2
-        }
-        return sample
+        return transformOwnedResource(
+            owned = this,
+            transform = { source -> Bitmap.createBitmap(source, 0, 0, width, height, matrix, true) },
+            release = Bitmap::recycle,
+        )
     }
 
     private enum class ExifOrientation(val swapsDimensions: Boolean) {
@@ -140,6 +140,56 @@ class ImageSourceReader(
             "image/avif",
         )
     }
+}
+
+internal fun imageDecodeSampleSize(
+    dimensions: ImageDimensions,
+    targetLongEdgePx: Int,
+    maxDecodedPixels: Long = MaxDecodedPixels,
+): Int {
+    var sample = 1
+    val sourceWidth = dimensions.widthPx.coerceAtLeast(1)
+    val sourceHeight = dimensions.heightPx.coerceAtLeast(1)
+    val target = targetLongEdgePx.coerceAtLeast(1)
+    while (sample <= Int.MAX_VALUE / 2) {
+        val nextSample = sample * 2
+        val nextLongEdge = max(sourceWidth, sourceHeight) / nextSample
+        val currentPixels = (sourceWidth / sample).coerceAtLeast(1).toLong() *
+            (sourceHeight / sample).coerceAtLeast(1).toLong()
+        if (nextLongEdge < target && currentPixels <= maxDecodedPixels) break
+        sample = nextSample
+    }
+    return sample
+}
+
+private const val MaxDecodedPixels = 24_000_000L
+
+internal fun <Resource : Any> transformOwnedResource(
+    owned: Resource,
+    transform: (Resource) -> Resource,
+    release: (Resource) -> Unit,
+): Resource {
+    val transformed = try {
+        transform(owned)
+    } catch (failure: Throwable) {
+        runCatching { release(owned) }
+            .exceptionOrNull()
+            ?.takeIf { it !== failure }
+            ?.let(failure::addSuppressed)
+        throw failure
+    }
+    if (transformed !== owned) {
+        try {
+            release(owned)
+        } catch (failure: Throwable) {
+            runCatching { release(transformed) }
+                .exceptionOrNull()
+                ?.takeIf { it !== failure }
+                ?.let(failure::addSuppressed)
+            throw failure
+        }
+    }
+    return transformed
 }
 
 sealed interface ImageValidationResult {

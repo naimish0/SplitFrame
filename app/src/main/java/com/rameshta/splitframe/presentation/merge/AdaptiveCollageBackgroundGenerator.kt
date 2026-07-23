@@ -6,6 +6,7 @@ import com.rameshta.splitframe.domain.AdaptiveGradientMath
 import com.rameshta.splitframe.domain.CollageGradient
 import com.rameshta.splitframe.domain.ImageSource
 import com.rameshta.splitframe.export.ImageSourceReader
+import com.rameshta.splitframe.render.BitmapBlur
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -18,12 +19,45 @@ internal class AdaptiveCollageBackgroundGenerator(
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ULong>?): Boolean =
             size > MaxCacheEntries
     }
+    private val blurCache = object : LinkedHashMap<String, Bitmap>(MaxBlurCacheEntries, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap>?): Boolean {
+            val remove = size > MaxBlurCacheEntries
+            if (remove) eldest?.value?.recycleBestEffort()
+            return remove
+        }
+    }
 
     suspend fun generate(sources: List<ImageSource>): CollageGradient {
         if (sources.isEmpty()) return CollageGradient.Neutral
         val colors = sources.distinctBy { it.gradientCacheKey() }
             .mapNotNull { source -> colorFor(source) }
         return AdaptiveGradientMath.gradientFromArgbColors(colors)
+    }
+
+    suspend fun generateBlurred(source: ImageSource, radius: Int): Bitmap? {
+        val key = "${source.gradientCacheKey()}|${radius.coerceIn(1, 32)}"
+        synchronized(blurCache) {
+            blurCache[key]?.takeUnless(Bitmap::isRecycled)?.let { return it }
+        }
+        val decoded = withContext(Dispatchers.IO) {
+            imageSourceReader.decodeBitmap(source, targetLongEdgePx = BlurDecodeEdge)
+        } ?: return null
+        val blurred = try {
+            withContext(Dispatchers.Default) { BitmapBlur.blur(decoded, radius) }
+        } finally {
+            decoded.recycleBestEffort()
+        }
+        synchronized(blurCache) {
+            blurCache.put(key, blurred)?.takeUnless { it === blurred }?.recycleBestEffort()
+        }
+        return blurred
+    }
+
+    fun clear() {
+        synchronized(blurCache) {
+            blurCache.values.forEach { bitmap -> bitmap.recycleBestEffort() }
+            blurCache.clear()
+        }
     }
 
     private suspend fun colorFor(source: ImageSource): ULong? {
@@ -53,6 +87,10 @@ internal class AdaptiveCollageBackgroundGenerator(
         when (this) {
             is ImageSource.LocalUri -> uri
         }
+
+    private fun Bitmap.recycleBestEffort() {
+        if (!isRecycled) runCatching(::recycle)
+    }
 
     private fun Bitmap.extractRepresentativeColor(): ULong? {
         val allPixels = mutableListOf<WeightedColor>()
@@ -118,5 +156,7 @@ internal class AdaptiveCollageBackgroundGenerator(
 
     private companion object {
         const val MaxCacheEntries = 64
+        const val MaxBlurCacheEntries = 6
+        const val BlurDecodeEdge = 512
     }
 }

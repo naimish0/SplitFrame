@@ -14,7 +14,13 @@ class MixedMediaMetadataReader(
 ) {
     fun read(uri: String): MixedMediaMetadataResult {
         val parsed = Uri.parse(uri)
-        val mimeType = contentResolver.getType(parsed)?.lowercase()
+        val mimeType = try {
+            contentResolver.getType(parsed)?.lowercase()
+        } catch (_: SecurityException) {
+            return MixedMediaMetadataResult.Unsupported(MediaMetadataFailure.Unreadable)
+        } catch (_: IllegalArgumentException) {
+            return MixedMediaMetadataResult.Unsupported(MediaMetadataFailure.UnsupportedFormat)
+        }
         return when {
             mimeType?.startsWith("image/") == true -> readImage(uri, mimeType)
             mimeType?.startsWith("video/") == true -> readVideo(uri)
