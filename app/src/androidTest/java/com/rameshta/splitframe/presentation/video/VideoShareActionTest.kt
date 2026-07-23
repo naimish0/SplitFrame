@@ -3,11 +3,14 @@ package com.rameshta.splitframe.presentation.video
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
+import com.rameshta.splitframe.data.DeleteVideoProjectResult
 import com.rameshta.splitframe.domain.ExportResult
 import com.rameshta.splitframe.domain.VideoMergeProject
 import com.rameshta.splitframe.ui.theme.SplitFrameTheme
@@ -39,6 +42,28 @@ class VideoShareActionTest {
         composeRule.onNodeWithText("Share")
             .performScrollTo()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun projectsLoadingStateNeverShowsTheEmptyMessage() {
+        composeRule.setContent {
+            SplitFrameTheme {
+                VideoProjectsScreen(
+                    projects = null,
+                    onBack = {},
+                    onNewProject = {},
+                    onOpenProject = {},
+                    onRenameProject = { _, _ -> false },
+                    onDuplicateProject = { null },
+                    onDeleteProject = { DeleteVideoProjectResult.NotFound },
+                    onUndoDelete = { false },
+                    onFinalizeDelete = { false },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Loading video projects…").assertIsDisplayed()
+        composeRule.onAllNodesWithText("No video projects yet").assertCountEquals(0)
     }
 
     @Test

@@ -457,7 +457,7 @@ fun SplitFrameApp(
                     val recentProjectsFlow = remember(recentVideoProjectStore) {
                         recentVideoProjectStore.observeProjects()
                     }
-                    val recentProjects by recentProjectsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+                    val recentProjects by recentProjectsFlow.collectAsStateWithLifecycle(initialValue = null)
                     BackHandler { route = route.copy(screen = AppScreen.ModeSelection) }
                     VideoProjectsScreen(
                         projects = recentProjects,

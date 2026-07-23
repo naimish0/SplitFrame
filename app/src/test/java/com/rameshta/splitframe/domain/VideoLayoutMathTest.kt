@@ -159,10 +159,35 @@ class VideoLayoutMathTest {
     }
 
     @Test
-    fun estimatedMp4SizeIsAlwaysPositive() {
-        val estimate = VideoLayoutMath.estimateMp4Bytes(OutputSize(1920, 1080), durationMs = 3_000L)
+    fun estimatedMp4SizeIncludesFrameRateAudioAndContainerOverhead() {
+        val fiveMinuteClip = clip(duration = 300_000L).copy(
+            frameRate = 30f,
+            hasAudio = true,
+        )
 
-        assertTrue(estimate >= 1_000_000L)
+        val estimate = VideoLayoutMath.estimateMp4Bytes(
+            OutputSize(1920, 1080),
+            clips = listOf(fiveMinuteClip),
+        )
+
+        assertTrue(estimate in 280_000_000L..330_000_000L)
+    }
+
+    @Test
+    fun estimatedMp4SizeUsesEachClipsTrimmedDurationAndFrameRate() {
+        val thirtyFps = clip(duration = 60_000L).copy(frameRate = 30f)
+        val sixtyFps = clip(duration = 60_000L).copy(frameRate = 60f)
+
+        val thirtyFpsEstimate = VideoLayoutMath.estimateMp4Bytes(
+            OutputSize(1920, 1080),
+            clips = listOf(thirtyFps),
+        )
+        val sixtyFpsEstimate = VideoLayoutMath.estimateMp4Bytes(
+            OutputSize(1920, 1080),
+            clips = listOf(sixtyFps),
+        )
+
+        assertTrue(sixtyFpsEstimate >= thirtyFpsEstimate * 19L / 10L)
     }
 
     private fun clip(

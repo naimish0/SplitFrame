@@ -314,6 +314,7 @@
     <string name="video_projects_subtitle">Resume or start a video merge</string>
     <string name="video_projects_empty_title">No video projects yet</string>
     <string name="video_projects_empty_body">Start a project. SplitFrame saves your edits on this device.</string>
+    <string name="video_projects_loading">Loading video projects…</string>
     <string name="video_project_new">New video project</string>
     <string name="video_project_name">Project name</string>
     <string name="video_project_rename_title">Rename project</string>

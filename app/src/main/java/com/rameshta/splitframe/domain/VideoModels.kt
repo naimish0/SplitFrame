@@ -390,16 +390,25 @@ object VideoLayoutMath {
         return start to end
     }
 
-    fun estimateMp4Bytes(size: OutputSize, durationMs: Long): Long {
+    fun estimateMp4Bytes(size: OutputSize, clips: List<VideoClip>): Long {
         val pixels = size.widthPx.toLong() * size.heightPx.toLong()
-        val seconds = (durationMs / 1000f).coerceAtLeast(1f)
-        val bitsPerPixelSecond = when {
+        val bitsPerPixelFrame = when {
             pixels >= 3840L * 2160L -> 0.09f
             pixels >= 2560L * 1440L -> 0.10f
-            pixels >= 1920L * 1080L -> 0.11f
+            pixels >= 1920L * 1080L -> 0.125f
             else -> 0.14f
         }
-        return ((pixels * bitsPerPixelSecond * seconds) / 8f).toLong().coerceAtLeast(1_000_000L)
+        val payloadBits = clips.sumOf { clip ->
+            val seconds = clip.trimmedDurationMs.coerceAtLeast(0L) / 1_000.0
+            val framesPerSecond = (clip.frameRate ?: DefaultEstimateFrameRate)
+                .coerceIn(MinEstimateFrameRate, MaxEstimateFrameRate)
+            val videoBits = pixels * bitsPerPixelFrame * framesPerSecond * seconds
+            val audioBits = if (clip.hasAudio) EstimatedAacBitsPerSecond * seconds else 0.0
+            videoBits + audioBits
+        }
+        return ((payloadBits * Mp4ContainerOverhead) / BitsPerByte)
+            .toLong()
+            .coerceAtLeast(MinEstimatedMp4Bytes)
     }
 
     private fun outputDurationForVideos(
@@ -447,6 +456,13 @@ object VideoLayoutMath {
 
     private const val InternalEdgeOverlapPx = 1f
     private const val SequenceTemplateIdPrefix = "video_sequence_"
+    private const val DefaultEstimateFrameRate = 30f
+    private const val MinEstimateFrameRate = 1f
+    private const val MaxEstimateFrameRate = 120f
+    private const val EstimatedAacBitsPerSecond = 128_000.0
+    private const val Mp4ContainerOverhead = 1.03
+    private const val BitsPerByte = 8.0
+    private const val MinEstimatedMp4Bytes = 1_000_000L
 }
 
 fun VideoClip.toMediaSource(): MediaSource.Video =

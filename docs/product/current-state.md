@@ -51,6 +51,7 @@ The home screen exposes Photo Collage and Video Merge. Resize is reachable from 
 | Video selection | Implemented | Ordered, video-only Photo Picker selection/replacement plus metadata and trim validation. |
 | Video preview | Implemented | One ExoPlayer playlist shows one full-canvas clip at a time with a cumulative trimmed-duration timeline matching export order. |
 | Sequential video export | Implemented | Media3 Transformer concatenates trimmed videos in order. Its foreground Worker validates the cache MP4, performs an exact-length cancellable MediaStore copy, and commits success only through the exact current Room work row. |
+| Video export estimate | Implemented | Estimated MP4 size accounts for output pixels, each clip's trimmed duration and frame rate, AAC audio, and container overhead. It remains an estimate because device encoders may select different effective bitrates. |
 | Video fit/transform parity | Cannot verify | Reachable preview is crop-fill only and now derives placement from the export crop model; real-device frame, rotation, and aspect comparison is pending. |
 | True video collage/split screen | Not implemented | No multi-sequence compositor or cell geometry is used by export. |
 | Mixed image/video composition | Implemented but inaccessible | Models/readers/persistence support images, but UI filters them and export rejects non-video media. |
@@ -107,13 +108,14 @@ Risks are intentionally ranked in the required product-safety order.
 ## Quality baseline
 
 - `debug` and `release` are the only build types; there are no flavors. Release code/resource minification is disabled, and no repository CI workflow was found.
-- The current JVM suite has 248 tests across 34 classes, including first-session app-open gating,
+- The current JVM suite has 249 tests across 34 classes, including first-session app-open gating,
   photo geometry, publication, recovery, persistence, templates, and video work ownership. It still
   does not render/encode a real bitmap or Media3 output.
-- Fourteen Android test files provide 43 tests. All 43 pass on a physical API 36 Samsung, including
+- Fourteen Android test files provide 44 tests. All 44 pass on a physical API 36 Samsung, including
   first-session marker persistence, activity recreation, current Room migration coverage, Home,
   template discovery, editor navigation, untouched-video-session abandonment, privacy restoration,
-  resize reachability, video sharing, and accessibility-state assertions.
+  video-project loading/empty separation, resize reachability, video sharing, and
+  accessibility-state assertions.
 - Debug lint reports 0 errors, 127 warnings, and 1 hint. The remaining findings are non-blocking
   resource, API-style, localization, deprecation, and dependency-update guidance.
 - There is no lint baseline, historical v1→v4 migration fixture, controlled process-death test, real revoked/cloud URI or ContentResolver/MediaStore fault-injection test, real JPEG/PNG/WebP integrity/alpha test, real MP4 integrity test, or ad/consent lifecycle test.

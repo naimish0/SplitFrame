@@ -16,6 +16,7 @@
 - Video preview/export implement the accepted sequential contract: one full-frame trimmed clip at a time, ordered cumulative timeline, per-segment clip audio, crop-fill transforms, H.264/AAC MP4, and no silent encoder fallback.
 - Successful photo history items open their exact saved URI in an installed viewer, and successful video exports expose a chooser-backed share action with the exact content URI and read grant.
 - Video export preflights current URIs/metadata, maps codec/storage failures, validates a non-empty playable video track/duration, sweeps stale cache files, and publishes only under exact work ownership.
+- Video export estimates include output pixels, per-clip trimmed duration/frame rate, AAC audio, and MP4 container overhead. Video Projects distinguishes initial loading from a confirmed empty result.
 - New video sessions remain transient until valid media is saved. Abandoning an untouched editor creates no recent entry, and historical empty records are excluded from recent surfaces.
 - Global and project-local video recovery compare exact WorkManager UUID/state. Startup cut-off and a five-second enqueue grace prevent recovery from invalidating fresh work.
 - Photo/resize/video MediaStore transactions provide exact-row caught-failure/cancellation rollback. They are not durable across OS process death.
@@ -77,7 +78,7 @@
 - MediaStore rollback is in-process. Process death can leave a pending row on API 29+ or a visible partial/orphan row on API 24–28.
 - Direct historical Room migrations from v1–v3 lack fixture coverage; confirm whether those schemas shipped.
 - Connected API 36 execution found and prompted the app-open logo crash fix. The post-fix suite now
-  passes all 43 instrumentation tests on the physical Samsung phone; the TV device was not used.
+  passes all 44 instrumentation tests on the physical Samsung phone; the TV device was not used.
 - Debug lint has 0 errors and 127 warnings/1 hint, mainly existing resource, deprecation, plural/KTX, and dependency-update findings.
 - Release minification/resource shrinking are disabled by existing configuration.
 - Template discovery and resize instrumentation now use the actual labels, explicit nested-row
@@ -106,11 +107,11 @@
 
 ## Tests already available
 
-- JVM: 248 test methods across 34 files, covering geometry, presets, resize stats, strict codecs, templates/ranking/application/use policy, navigation/state, all ad policies, export transactions/failure mapping, recovery, output caps, and work ownership.
-- Instrumentation: 43 methods across 14 files, covering first-session app-open persistence,
+- JVM: 249 test methods across 34 files, covering geometry, presets, resize stats, strict codecs, templates/ranking/application/use policy, navigation/state, all ad policies, export transactions/failure mapping, recovery, output caps, MP4 estimation, and work ownership.
+- Instrumentation: 44 methods across 14 files, covering first-session app-open persistence,
   Room/current migration chain, recents, route/activity recreation, Home, template discovery/card
   hit targets/count handling, editor media visibility, untouched video-session abandonment, resize
-  reachability, video sharing, and durable interstitial preferences. All 43 pass on a physical API
+  reachability, video-project loading, video sharing, and durable interstitial preferences. All 44 pass on a physical API
   36 Samsung phone.
 - Missing: controlled OS death, real provider revocation/cloud media, historical v1→v3 migrations, actual MediaStore interruption, image goldens, Transformer media fixtures, real UMP/AdMob lifecycle, and accessibility/form-factor automation.
 

@@ -77,7 +77,7 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun VideoProjectsScreen(
-    projects: List<RecentVideoProject>,
+    projects: List<RecentVideoProject>?,
     onBack: () -> Unit,
     onNewProject: () -> Unit,
     onOpenProject: (String) -> Unit,
@@ -97,10 +97,10 @@ fun VideoProjectsScreen(
     val activeExportMessage = stringResource(R.string.video_project_delete_export_active)
     var renameTarget by remember { mutableStateOf<RecentVideoProject?>(null) }
     var deleteTarget by remember { mutableStateOf<RecentVideoProject?>(null) }
-    val nativeAdPositions = remember(projects.size, showNativeAds) {
+    val nativeAdPositions = remember(projects?.size, showNativeAds) {
         if (showNativeAds) {
             EmbeddedAdPolicy.nativeInsertionPositions(
-                organicItemCount = projects.size,
+                organicItemCount = projects?.size ?: 0,
                 afterEvery = 6,
                 maximumAds = 1,
             ).toSet()
@@ -131,7 +131,13 @@ fun VideoProjectsScreen(
             }
         },
     ) { padding ->
-        if (projects.isEmpty()) {
+        if (projects == null) {
+            LoadingProjects(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+            )
+        } else if (projects.isEmpty()) {
             EmptyProjects(
                 modifier = Modifier
                     .fillMaxSize()
@@ -235,6 +241,22 @@ fun VideoProjectsScreen(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun LoadingProjects(modifier: Modifier) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CircularProgressIndicator()
+            Text(
+                text = stringResource(R.string.video_projects_loading),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
 }
 

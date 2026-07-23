@@ -8,7 +8,7 @@ Status values are **Passed**, **Failed**, **Blocked**, **Manual verification req
 ## Release decision
 
 **Not ready for Play publication.** The current source compiles as a release APK, focused and
-combined JVM evidence passes, lint has no errors, and all 43 instrumentation tests pass on a
+combined JVM evidence passes, lint has no errors, and all 44 instrumentation tests pass on a
 physical API 36 Samsung. Publication remains blocked by external release signing. Process-death
 MediaStore durability, real codecs/providers, UMP/AdMob callbacks, accessibility, and broader
 API-level coverage also remain manual release gates.
@@ -19,10 +19,10 @@ API-level coverage also remain manual release gates.
 |---|---|---|
 | Debug production compilation | Passed | Repeated focused JVM/device builds compiled current debug source. |
 | Release compilation/package | Passed | Fresh `:app:assembleRelease`; release lint-vital also passed. |
-| JVM tests | Passed | 248 current test methods across 34 files, including route restoration and recent-export state mapping. |
+| JVM tests | Passed | 249 current test methods across 34 files, including route restoration, recent-export state mapping, and frame-rate-aware MP4 estimation. |
 | Static analysis | Passed | `:app:lintDebug`: 0 errors, 127 warnings, 1 hint. |
-| Instrumentation source compilation | Passed | 43 tests across 14 files compile. |
-| Connected instrumentation | Passed on API 36 | All 43 tests pass on a physical Samsung API 36 phone; the TV device was explicitly excluded. |
+| Instrumentation source compilation | Passed | 44 tests across 14 files compile. |
+| Connected instrumentation | Passed on API 36 | All 44 tests pass on a physical Samsung API 36 phone; the TV device was explicitly excluded. |
 | Accidental debug code | Passed | No new `BuildConfig.DEBUG` bypass, localhost endpoint, test-only import in main, stack trace printing, or test-device override was found. |
 | Credentials/secrets | Passed | No credential-shaped material or signing secret was added; production identifiers were not changed or copied into docs. |
 | Ad ID routing | Passed | Debug ad units remain official Google test inventory; release units remain the unmodified production configuration. |
@@ -56,6 +56,7 @@ API-level coverage also remain manual release gates.
 | Preview/export pixel tolerance | Manual verification required | No golden screenshot versus decoded-output suite exists. |
 | Video sequence semantics | Passed | Preview and export remain sequential, trimmed, ordered, crop-fill, and per-clip audio; legacy primary-audio state is inaccessible compatibility data. |
 | Video requested codec/size contract | Passed | H.264/AAC is explicit, silent encoder fallback is disabled, and unsupported encoders map to actionable errors. |
+| Video estimated size | Passed | Calculation includes output pixels, per-clip trimmed duration/frame rate, AAC audio, and MP4 overhead. Five-minute 1080p/30 fps regression coverage yields roughly 305 MB instead of the prior 8 MB under-estimate. |
 | Video playable-output validation | Passed | Cache MP4 must be non-empty with a video track and valid known duration before publication. |
 | Codec/rotation/HDR/audio boundary parity | Manual verification required | Requires representative real media on API 24+. |
 | Caught failure/cancellation cleanup | Passed | Photo, resize, and video transactions roll back exact MediaStore entries; bitmap/codecs/files are released best-effort. |
@@ -78,7 +79,7 @@ API-level coverage also remain manual release gates.
 | Back/navigation restoration | Passed | Saveable routes preserve every reachable destination, including Privacy, Home/Template callers, and exact video projects. |
 | Video result sharing | Passed | Successful export exposes a chooser-backed `video/mp4` share intent with the exact content URI, clip data, and read grant. |
 | Light/dark, large font, TalkBack, touch, insets | Manual verification required | Source uses Material 3 semantics/targets/insets; runtime focus order, clipping, contrast, 200% font, and form-factor coverage remain open. |
-| Loading/empty/error states | Passed | Implemented across Home, discovery, recents, editors, resize, and ads; applicable connected assertions pass on API 36. |
+| Loading/empty/error states | Passed | Implemented across Home, discovery, recents, editors, resize, and ads. Video Projects now renders an explicit loading state and cannot flash the empty state before its first database emission. |
 
 ## Advertising and privacy
 
@@ -87,7 +88,7 @@ API-level coverage also remain manual release gates.
 | UMP eligibility/privacy entry | Passed | All formats share consent state; privacy options are exposed when required. Real geography/console behavior is manual. |
 | Workflow interstitials | Passed | Stable workflow IDs count committed successes only; one opportunity follows every second unique success and never blocks output. |
 | App-open policy | Passed | First-session exclusion, cold/qualified return windows, four-hour cap, external-UI/export/config suppression, late-ad expiry, and full-screen separation are centralized. |
-| App-open loading surface | Passed | Device testing found the inset-drawable crash; it now uses a Compose-compatible raster logo, and the current 43-test API 36 suite passes. |
+| App-open loading surface | Passed | Device testing found the inset-drawable crash; it now uses a Compose-compatible raster logo, and the current 44-test API 36 suite passes. |
 | Banner lifecycle/placement | Passed | One adaptive anchored banner is limited to safe browsing surfaces with reserved layout and lifecycle disposal. |
 | Native lifecycle/placement | Passed | Stable insertion after organic content, caps, attribution/AdChoices, and explicit destruction are implemented. |
 | Real SDK/UMP/no-fill/click callbacks | Manual verification required | Run with official test inventory and UMP test geography on physical devices. |

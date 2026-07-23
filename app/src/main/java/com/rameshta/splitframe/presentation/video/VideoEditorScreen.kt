@@ -952,7 +952,7 @@ private fun VideoExportPanel(state: VideoMergeState) {
     val shareUnavailableMessage = stringResource(R.string.video_share_unavailable)
     val outputSize = VideoLayoutMath.outputSizeForMedia(project.canvasAspectRatio, project.exportResolution, project.mediaByCell)
     val outputDurationMs = VideoLayoutMath.outputDurationForMergedVideos(project.orderedClips)
-    val estimateBytes = VideoLayoutMath.estimateMp4Bytes(outputSize, outputDurationMs)
+    val estimateBytes = VideoLayoutMath.estimateMp4Bytes(outputSize, project.orderedClips)
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(text = stringResource(R.string.video_export_title), style = MaterialTheme.typography.titleMedium)
