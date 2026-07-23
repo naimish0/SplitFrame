@@ -12,6 +12,17 @@ SplitFrame is an offline-first Android media utility with three reachable workfl
 
 The home screen exposes Photo Collage and Video Merge. Resize is reachable from an icon on the template-picker toolbar. The app has no account, cloud project, backend processing, subscription, or purchase flow.
 
+## Shared-contract profile notes
+
+- Localization is intentionally `SINGLE_LANGUAGE` with English (`en`) as the only shipped and
+  default locale. This is the approved exception to the shared contract's 14-locale multilingual
+  baseline. Do not advertise or generate store assets for unshipped translations.
+- The activated shared contract prohibits app-open ads for first-time users.
+  `SplitFrameAdManager` suppresses app-open loading and presentation for the entire first installed
+  process session, records completion after the first genuine background transition, and enables
+  the existing app-open policy only in a later process. Configuration changes do not complete the
+  first session; an interrupted first launch safely receives suppression again.
+
 ## Classification legend
 
 - **Implemented** — reachable and the main behavior is present in source.

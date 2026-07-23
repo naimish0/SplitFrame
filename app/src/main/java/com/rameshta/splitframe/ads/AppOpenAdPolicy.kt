@@ -1,5 +1,19 @@
 package com.rameshta.splitframe.ads
 
+internal class FirstSessionAppOpenGate(
+    hasCompletedFirstSession: Boolean,
+    private val markFirstSessionCompleted: () -> Unit,
+) {
+    val appOpenAdsAllowed: Boolean = hasCompletedFirstSession
+    private var completionRecorded = hasCompletedFirstSession
+
+    fun onActivityStopped(changingConfigurations: Boolean) {
+        if (appOpenAdsAllowed || completionRecorded || changingConfigurations) return
+        completionRecorded = true
+        markFirstSessionCompleted()
+    }
+}
+
 internal enum class AppOpenTrigger {
     ColdStart,
     ForegroundReturn,

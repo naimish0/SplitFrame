@@ -8,6 +8,39 @@ import org.junit.Test
 
 class AppOpenAdPolicyTest {
     @Test
+    fun firstInstalledSessionBlocksAppOpenForEntireProcessAndRecordsCompletionOnce() {
+        var completionWrites = 0
+        val gate = FirstSessionAppOpenGate(
+            hasCompletedFirstSession = false,
+            markFirstSessionCompleted = { completionWrites++ },
+        )
+
+        assertFalse(gate.appOpenAdsAllowed)
+        gate.onActivityStopped(changingConfigurations = true)
+        assertEquals(0, completionWrites)
+
+        gate.onActivityStopped(changingConfigurations = false)
+        gate.onActivityStopped(changingConfigurations = false)
+
+        assertEquals(1, completionWrites)
+        assertFalse(gate.appOpenAdsAllowed)
+    }
+
+    @Test
+    fun laterInstalledSessionAllowsAppOpenWithoutRewritingCompletion() {
+        var completionWrites = 0
+        val gate = FirstSessionAppOpenGate(
+            hasCompletedFirstSession = true,
+            markFirstSessionCompleted = { completionWrites++ },
+        )
+
+        gate.onActivityStopped(changingConfigurations = false)
+
+        assertTrue(gate.appOpenAdsAllowed)
+        assertEquals(0, completionWrites)
+    }
+
+    @Test
     fun coldLauncherStartOpensOneBoundedNonInteractiveOpportunity() {
         val controller = controller(coldWindowMillis = 1_500L)
 

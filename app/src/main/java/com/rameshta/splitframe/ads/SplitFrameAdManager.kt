@@ -43,6 +43,15 @@ class SplitFrameAdManager internal constructor(
     private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val preferences =
         context.getSharedPreferences(SplitFrameAdPreferencesName, Context.MODE_PRIVATE)
+    private val firstSessionAppOpenGate = FirstSessionAppOpenGate(
+        hasCompletedFirstSession =
+            preferences.getBoolean(FirstSessionCompletedPreferenceKey, false),
+        markFirstSessionCompleted = {
+            preferences.edit()
+                .putBoolean(FirstSessionCompletedPreferenceKey, true)
+                .apply()
+        },
+    )
 
     private val _fullScreenAdState = MutableStateFlow(FullScreenAdState.Idle)
     internal val fullScreenAdState: StateFlow<FullScreenAdState> = _fullScreenAdState.asStateFlow()
@@ -164,7 +173,8 @@ class SplitFrameAdManager internal constructor(
             restored = restored,
             launcherStart = launcherStart,
             coldStartAllowed =
-                isAppOpenShowIntervalElapsed() &&
+                firstSessionAppOpenGate.appOpenAdsAllowed &&
+                    isAppOpenShowIntervalElapsed() &&
                     isInterstitialSeparationElapsed() &&
                     _fullScreenAdState.value == FullScreenAdState.Idle,
         )
@@ -173,6 +183,10 @@ class SplitFrameAdManager internal constructor(
     }
 
     internal fun onActivityResumed(activity: Activity) {
+        if (!firstSessionAppOpenGate.appOpenAdsAllowed) {
+            syncAppOpenLoadingSurface()
+            return
+        }
         val opportunity = appOpenOpportunityController.onActivityResumed(SystemClock.elapsedRealtime())
         syncAppOpenLoadingSurface()
         opportunity?.let(::scheduleOpportunityExpiry)
@@ -186,6 +200,7 @@ class SplitFrameAdManager internal constructor(
             consentUiActive = adsConfigRepository.isConsentFlowInProgress.value,
             fullScreenAdState = _fullScreenAdState.value,
         )
+        firstSessionAppOpenGate.onActivityStopped(changingConfigurations)
         appOpenOpportunityExpiryJob?.cancel()
         syncAppOpenLoadingSurface()
     }
@@ -256,7 +271,7 @@ class SplitFrameAdManager internal constructor(
     }
 
     private fun loadAppOpenAd() {
-        if (!canPreloadAds()) return
+        if (!firstSessionAppOpenGate.appOpenAdsAllowed || !canPreloadAds()) return
         if (isAppOpenAdFresh() || isLoadingAppOpenAd) return
 
         discardAppOpenAd()
@@ -290,6 +305,7 @@ class SplitFrameAdManager internal constructor(
         activity: Activity,
         allowForegroundOpportunity: Boolean,
     ): Boolean {
+        if (!firstSessionAppOpenGate.appOpenAdsAllowed) return false
         val nowElapsedMillis = SystemClock.elapsedRealtime()
         val opportunity = appOpenOpportunityController.current(nowElapsedMillis)
             ?: run {
@@ -516,3 +532,4 @@ class SplitFrameAdManager internal constructor(
 }
 
 internal const val LastAppOpenAdShownAtPreferenceKey = "last_app_open_ad_shown_at"
+internal const val FirstSessionCompletedPreferenceKey = "first_session_completed"
