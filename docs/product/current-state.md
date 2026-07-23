@@ -58,9 +58,9 @@ The home screen exposes Photo Collage and Video Merge. Resize is reachable from 
 | Favorites | Implemented | Template discovery exposes favorite controls and Home renders the persisted favorites rail when it has data. |
 | Recent photo exports | Implemented | Home renders valid recent photo exports from Room and opens the exact saved content URI in a compatible viewer. Missing or unsupported output is reported without blocking other work. |
 | Recent layouts | Implemented | Substantive template use and successful export update persisted recents; discovery and Home consume the ranked records. |
-| Recent video projects | Implemented | Video Merge opens a timestamped local browser with resume, rename, duplicate, API 27+ fixed-size frame thumbnail/placeholder, delete confirmation, token-guarded Undo, and empty/missing/corrupt states. API 24–26 deliberately uses placeholders; photo and resize projects are not included. |
+| Recent video projects | Implemented | Video Merge opens a timestamped local browser with resume, rename, duplicate, API 27+ fixed-size frame thumbnail/placeholder, delete confirmation, token-guarded Undo, and missing/corrupt states. Untouched new sessions remain transient and legacy empty records are hidden. API 24–26 deliberately uses placeholders; photo and resize projects are not included. |
 | Photo/resize recovery | Implemented | Photo drafts use a strict Room-backed primitive codec plus `SavedStateHandle`; resize source, request, result, Fit/Fill, and output metadata restore through saved state and preferences with validity checks. |
-| Video project persistence | Implemented | The saveable route carries one canonical project UUID into a project-keyed Koin ViewModel; explicit new sessions create that exact ID and restore-only sessions never resurrect a missing row. |
+| Video project persistence | Implemented | The saveable route carries one canonical project UUID into a project-keyed Koin ViewModel. New sessions remain transient until valid media is persisted, survive recreation with that exact ID, and restore-only sessions never resurrect a missing row. |
 | WorkManager video recovery | Implemented | The UI observes the exact project's Room work row across Activity recreation. Work writes are guarded by WorkManager ID and allowed prior state; the final running-to-succeeded update is the cancellation-shielded publication commit. Controlled process-death validation remains manual. |
 | Video export notification routing | Implemented | Foreground and terminal notifications use a strict action, destination, canonical project UUID, matching data URI, and project-specific completion identity to open the exact stored project. Missing/malformed/deleted targets fall back to Home. |
 | Ads and consent | Partially implemented | UMP-gated banner/native/interstitial/app-open formats exist; release-console declarations and real rendering cannot be proved from source. |
@@ -89,7 +89,7 @@ The home screen exposes Photo Collage and Video Merge. Resize is reachable from 
 | Video export work/result | WorkManager plus Room | Recreated UI observes queued/running/terminal state for the exact work ID; stale worker transitions are rejected. |
 | Notification destination | Strict explicit `MainActivity` intent | Exact action, destination, data URI, and canonical project UUID are validated before routing. |
 
-The video project uses a custom URL-encoded, tab/newline-delimited positional blob inside Room. Modern nonblank payloads now decode all-or-nothing; malformed/unknown/duplicate/invalid rows are surfaced as corrupt and are never normalized or rewritten. A blank modern payload is a valid empty draft, while `NULL` retains legacy clip fallback. There is still no schema-level media-item table.
+The video project uses a custom URL-encoded, tab/newline-delimited positional blob inside Room. Modern nonblank payloads now decode all-or-nothing; malformed/unknown/duplicate/invalid rows are surfaced as corrupt and are never normalized or rewritten. A historical blank modern payload remains decodable but is excluded from recent-project surfaces, while `NULL` retains legacy clip fallback. There is still no schema-level media-item table.
 
 ## Risk register
 
@@ -110,10 +110,10 @@ Risks are intentionally ranked in the required product-safety order.
 - The current JVM suite has 248 tests across 34 classes, including first-session app-open gating,
   photo geometry, publication, recovery, persistence, templates, and video work ownership. It still
   does not render/encode a real bitmap or Media3 output.
-- Fourteen Android test files provide 42 tests. All 42 pass on a physical API 36 Samsung, including
+- Fourteen Android test files provide 43 tests. All 43 pass on a physical API 36 Samsung, including
   first-session marker persistence, activity recreation, current Room migration coverage, Home,
-  template discovery, editor navigation, privacy restoration, resize reachability, video sharing,
-  and accessibility-state assertions.
+  template discovery, editor navigation, untouched-video-session abandonment, privacy restoration,
+  resize reachability, video sharing, and accessibility-state assertions.
 - Debug lint reports 0 errors, 127 warnings, and 1 hint. The remaining findings are non-blocking
   resource, API-style, localization, deprecation, and dependency-update guidance.
 - There is no lint baseline, historical v1→v4 migration fixture, controlled process-death test, real revoked/cloud URI or ContentResolver/MediaStore fault-injection test, real JPEG/PNG/WebP integrity/alpha test, real MP4 integrity test, or ad/consent lifecycle test.

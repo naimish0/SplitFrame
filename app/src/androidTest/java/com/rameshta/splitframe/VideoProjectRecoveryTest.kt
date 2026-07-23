@@ -19,9 +19,13 @@ import com.rameshta.splitframe.ads.SplitFrameAdPreferencesName
 import com.rameshta.splitframe.data.local.VideoExportWorkDao
 import com.rameshta.splitframe.data.local.VideoProjectDao
 import com.rameshta.splitframe.data.local.SplitFrameDatabase
+import com.rameshta.splitframe.data.local.RecentProjectDao
 import com.rameshta.splitframe.domain.ExportResolution
+import com.rameshta.splitframe.domain.MediaSource
 import com.rameshta.splitframe.domain.VideoMergeProject
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -44,7 +48,16 @@ class VideoProjectRecoveryTest {
                 VideoMergeProject(
                     id = ProjectId,
                     exportResolution = ExportResolution.UHD_2160,
+                    mediaByCell = mapOf(
+                        0 to MediaSource.Image(
+                            id = "recovery-media",
+                            uri = "content://media/image/recovery",
+                            width = 1_920,
+                            height = 1_080,
+                        ),
+                    ),
                 ),
+                initialName = RecoveryProjectName,
             )
         }
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -120,7 +133,7 @@ class VideoProjectRecoveryTest {
         composeRule.onNodeWithText("Video projects").assertIsDisplayed()
         activity = resumedActivity()
 
-        composeRule.onNodeWithText("Video project").performClick()
+        composeRule.onNodeWithText(RecoveryProjectName).performClick()
         waitForVideoEditor()
         composeRule.onNodeWithText("2160p (4K)").assertIsSelected()
 
@@ -144,6 +157,27 @@ class VideoProjectRecoveryTest {
         waitForText("Photos and videos")
         composeRule.onNodeWithText("Photos and videos").assertIsDisplayed()
         activity = resumedActivity()
+    }
+
+    @Test
+    fun abandoningUntouchedNewProjectDoesNotCreateARecentProject() {
+        val recentProjectDao = GlobalContext.get().get<RecentProjectDao>()
+        val idsBefore = runBlocking {
+            recentProjectDao.observeActive().first().map { it.projectId }.toSet()
+        }
+
+        waitForText("Merge Videos")
+        composeRule.onNodeWithText("Merge Videos").performClick()
+        waitForText("Video projects")
+        composeRule.onNodeWithContentDescription("New video project").performClick()
+        waitForText("Merge videos")
+        composeRule.onNodeWithContentDescription("Back").performClick()
+        waitForText("Video projects")
+
+        val idsAfter = runBlocking {
+            recentProjectDao.observeActive().first().map { it.projectId }.toSet()
+        }
+        assertEquals(idsBefore, idsAfter)
     }
 
     private fun waitForVideoEditor() {
@@ -180,5 +214,6 @@ class VideoProjectRecoveryTest {
 
     private companion object {
         const val ProjectId = "88888888-8888-4888-8888-888888888888"
+        const val RecoveryProjectName = "Recovery project"
     }
 }

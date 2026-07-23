@@ -8,7 +8,7 @@ Status values are **Passed**, **Failed**, **Blocked**, **Manual verification req
 ## Release decision
 
 **Not ready for Play publication.** The current source compiles as a release APK, focused and
-combined JVM evidence passes, lint has no errors, and all 42 instrumentation tests pass on a
+combined JVM evidence passes, lint has no errors, and all 43 instrumentation tests pass on a
 physical API 36 Samsung. Publication remains blocked by external release signing. Process-death
 MediaStore durability, real codecs/providers, UMP/AdMob callbacks, accessibility, and broader
 API-level coverage also remain manual release gates.
@@ -21,8 +21,8 @@ API-level coverage also remain manual release gates.
 | Release compilation/package | Passed | Fresh `:app:assembleRelease`; release lint-vital also passed. |
 | JVM tests | Passed | 248 current test methods across 34 files, including route restoration and recent-export state mapping. |
 | Static analysis | Passed | `:app:lintDebug`: 0 errors, 127 warnings, 1 hint. |
-| Instrumentation source compilation | Passed | 42 tests across 14 files compile. |
-| Connected instrumentation | Passed on API 36 | All 42 tests pass on a physical Samsung API 36 phone; the TV device was explicitly excluded. |
+| Instrumentation source compilation | Passed | 43 tests across 14 files compile. |
+| Connected instrumentation | Passed on API 36 | All 43 tests pass on a physical Samsung API 36 phone; the TV device was explicitly excluded. |
 | Accidental debug code | Passed | No new `BuildConfig.DEBUG` bypass, localhost endpoint, test-only import in main, stack trace printing, or test-device override was found. |
 | Credentials/secrets | Passed | No credential-shaped material or signing secret was added; production identifiers were not changed or copied into docs. |
 | Ad ID routing | Passed | Debug ad units remain official Google test inventory; release units remain the unmodified production configuration. |
@@ -36,7 +36,8 @@ API-level coverage also remain manual release gates.
 |---|---|---|
 | Room current schema and v4→v5→v6 chain | Passed | DAO/current-schema and chained migration instrumentation exist; last executed migration suite passed before this final cycle. |
 | Historical v1→v4 upgrades | Blocked | No fixture-backed direct migration coverage. Confirm whether those versions reached users before release. |
-| Existing video-project compatibility | Passed | Legacy-null versus modern-blank payload behavior is retained; malformed payloads and unknown modern enums are corrupt instead of silently normalized. |
+| Existing video-project compatibility | Passed | Legacy-null versus modern-blank decoding behavior is retained; blank projects are hidden from recent surfaces, while malformed payloads and unknown modern enums remain actionable corrupt records instead of being silently normalized. |
+| Untouched video sessions | Passed | New project IDs remain transient until valid media is persisted; abandoning the editor creates no recent-project entry, and historical empty records are hidden. |
 | Rename/duplicate/delete/Undo | Passed | DAO/domain implementation and tests exist; real lifecycle/provider matrix remains manual. |
 | Photo active draft | Passed | Strict versioned primitive codec, preferences, SavedStateHandle, malformed-draft blocking, and missing-media repair state. |
 | Resize restoration | Passed | Source, request, actual output metadata, output readability, and Fit/Fill semantics are validated before result restoration. |
@@ -86,7 +87,7 @@ API-level coverage also remain manual release gates.
 | UMP eligibility/privacy entry | Passed | All formats share consent state; privacy options are exposed when required. Real geography/console behavior is manual. |
 | Workflow interstitials | Passed | Stable workflow IDs count committed successes only; one opportunity follows every second unique success and never blocks output. |
 | App-open policy | Passed | First-session exclusion, cold/qualified return windows, four-hour cap, external-UI/export/config suppression, late-ad expiry, and full-screen separation are centralized. |
-| App-open loading surface | Passed | Device testing found the inset-drawable crash; it now uses a Compose-compatible raster logo, and the current 42-test API 36 suite passes. |
+| App-open loading surface | Passed | Device testing found the inset-drawable crash; it now uses a Compose-compatible raster logo, and the current 43-test API 36 suite passes. |
 | Banner lifecycle/placement | Passed | One adaptive anchored banner is limited to safe browsing surfaces with reserved layout and lifecycle disposal. |
 | Native lifecycle/placement | Passed | Stable insertion after organic content, caps, attribution/AdChoices, and explicit destruction are implemented. |
 | Real SDK/UMP/no-fill/click callbacks | Manual verification required | Run with official test inventory and UMP test geography on physical devices. |

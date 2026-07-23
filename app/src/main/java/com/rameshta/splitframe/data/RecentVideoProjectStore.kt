@@ -69,7 +69,7 @@ class RecentVideoProjectStore(
                 withContext(Dispatchers.IO) {
                     entities
                         .filter { it.projectType == ProjectTypeVideo }
-                        .map { entity ->
+                        .mapNotNull { entity ->
                             val inspection = if (
                                 entity.projectFormatVersion == SupportedProjectFormatVersion &&
                                 entity.layoutVersion == SupportedLayoutVersion
@@ -81,12 +81,12 @@ class RecentVideoProjectStore(
                             when (inspection) {
                                 is VideoProjectReadResult.Ready -> {
                                     val media = inspection.project.mediaByCell.values
+                                    if (media.isEmpty()) return@mapNotNull null
                                     val missingCount = media
                                         .map { it.uri }
                                         .distinct()
                                         .count { uri -> !mediaUriAccess.isReadable(uri) }
                                     val status = when {
-                                        media.isEmpty() -> RecentVideoProjectStatus.Empty
                                         missingCount > 0 -> RecentVideoProjectStatus.MissingMedia
                                         else -> RecentVideoProjectStatus.Ready
                                     }

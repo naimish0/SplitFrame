@@ -52,8 +52,7 @@ class VideoProjectStore(
             VideoProjectReadResult.NotFound -> Unit
         }
         if (!createIfMissing) return null
-        val created = VideoMergeProject(id = projectId)
-        return if (save(created)) created else (inspect(projectId) as? VideoProjectReadResult.Ready)?.project
+        return VideoMergeProject(id = projectId)
     }
 
     suspend fun get(projectId: String): VideoMergeProject? =

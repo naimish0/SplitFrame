@@ -22,7 +22,7 @@ import org.junit.Test
 
 class VideoProjectStoreTest {
     @Test
-    fun explicitNewSessionCreatesAndPersistsRequestedProject() = runBlocking {
+    fun explicitNewSessionRemainsTransientUntilItHasEdits() = runBlocking {
         val projectDao = FakeVideoProjectDao()
         val store = VideoProjectStore(projectDao, FakeVideoExportWorkDao())
 
@@ -30,8 +30,9 @@ class VideoProjectStoreTest {
         val restored = store.openProject(FirstProjectId, createIfMissing = false)
 
         assertEquals(FirstProjectId, created?.id)
-        assertEquals(FirstProjectId, restored?.id)
-        assertEquals(1, projectDao.entities.size)
+        assertNull(restored)
+        assertEquals(0, projectDao.entities.size)
+        assertEquals(0, projectDao.upsertCount)
     }
 
     @Test
@@ -51,8 +52,9 @@ class VideoProjectStoreTest {
         val projectDao = FakeVideoProjectDao()
         val store = VideoProjectStore(projectDao, FakeVideoExportWorkDao())
         val first = requireNotNull(store.openProject(FirstProjectId, createIfMissing = true))
-        store.openProject(SecondProjectId, createIfMissing = true)
-        store.save(first.copy(exportResolution = ExportResolution.UHD_2160))
+        val second = requireNotNull(store.openProject(SecondProjectId, createIfMissing = true))
+        store.save(projectWithVideo(first.id).copy(exportResolution = ExportResolution.UHD_2160))
+        store.save(projectWithVideo(second.id))
 
         assertEquals(ExportResolution.UHD_2160, store.get(FirstProjectId)?.exportResolution)
         assertNotNull(store.get(SecondProjectId))

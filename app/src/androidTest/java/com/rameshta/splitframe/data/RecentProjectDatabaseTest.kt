@@ -110,15 +110,15 @@ class RecentProjectDatabaseTest {
     }
 
     @Test
-    fun emptyMissingAndCorruptProjectsHaveDistinctStates() = runBlocking {
+    fun emptyProjectsAreHiddenWhileMissingAndCorruptProjectsRemainActionable() = runBlocking {
         val videoStore = videoStore()
         val access = MediaUriAccess { uri -> uri.endsWith("/1") }
         val recentStore = recentStore(videoStore, access = access)
         videoStore.save(VideoMergeProject(id = EmptyProjectId), initialName = "Empty")
         videoStore.save(project(ProjectId), initialName = "Missing")
 
-        val initial = recentStore.observeProjects().first { it.size == 2 }.associateBy { it.id }
-        assertEquals(RecentVideoProjectStatus.Empty, initial.getValue(EmptyProjectId).status)
+        val initial = recentStore.observeProjects().first { it.size == 1 }.associateBy { it.id }
+        assertFalse(initial.containsKey(EmptyProjectId))
         assertEquals(RecentVideoProjectStatus.MissingMedia, initial.getValue(ProjectId).status)
         assertEquals(1, initial.getValue(ProjectId).missingMediaCount)
 

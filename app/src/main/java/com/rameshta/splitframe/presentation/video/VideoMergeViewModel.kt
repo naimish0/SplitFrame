@@ -8,6 +8,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.rameshta.splitframe.R
+import com.rameshta.splitframe.data.VideoProjectReadResult
 import com.rameshta.splitframe.data.VideoProjectStore
 import com.rameshta.splitframe.data.local.VideoExportWorkEntity
 import com.rameshta.splitframe.domain.ExportResolution
@@ -67,6 +68,7 @@ class VideoMergeViewModel(
 
     init {
         viewModelScope.launch {
+            val existingProject = videoProjectStore.inspect(sessionArgs.projectId)
             val openedProject = videoProjectStore.openProject(
                 projectId = sessionArgs.projectId,
                 createIfMissing = sessionArgs.createIfMissing,
@@ -79,6 +81,7 @@ class VideoMergeViewModel(
             _state.update {
                 it.copy(
                     project = project,
+                    isProjectPersisted = existingProject is VideoProjectReadResult.Ready,
                     selectedClipIndex = project.selectedCellIndex ?: 0,
                     status = VideoEditorStatus.Initial,
                 )
@@ -381,11 +384,13 @@ class VideoMergeViewModel(
     }
 
     private fun resetProject() {
-        val current = _state.value.project ?: return
+        val state = _state.value
+        val current = state.project ?: return
         val reset = VideoMergeProject(id = current.id)
         undoStack.clear()
         redoStack.clear()
         reduce(VideoMergeResultEvent.ProjectChanged(reset))
+        if (!state.isProjectPersisted) return
         viewModelScope.launch {
             persistenceMutex.withLock { videoProjectStore.reset(current.id) }
         }
@@ -417,7 +422,14 @@ class VideoMergeViewModel(
         val enqueueJob = viewModelScope.launch {
             var queuedWorkId: String? = null
             try {
-                persistenceMutex.withLock { videoProjectStore.save(project.withAvailableAudio()) }
+                val saved = persistenceMutex.withLock {
+                    videoProjectStore.save(project.withAvailableAudio())
+                }
+                if (!saved) {
+                    reduce(VideoMergeResultEvent.Failed(R.string.video_export_queue_failed))
+                    return@launch
+                }
+                markProjectPersisted(project.id)
                 val workName = VideoExportWorker.uniqueWorkName(project.id)
                 val request = OneTimeWorkRequestBuilder<VideoExportWorker>()
                     .setId(UUID.randomUUID())
@@ -557,8 +569,20 @@ class VideoMergeViewModel(
     }
 
     private fun persist(project: VideoMergeProject) {
+        if (project.mediaByCell.isEmpty() && !_state.value.isProjectPersisted) return
         viewModelScope.launch {
-            persistenceMutex.withLock { videoProjectStore.save(project) }
+            val saved = persistenceMutex.withLock { videoProjectStore.save(project) }
+            if (saved) markProjectPersisted(project.id)
+        }
+    }
+
+    private fun markProjectPersisted(projectId: String) {
+        _state.update { state ->
+            if (state.project?.id == projectId) {
+                state.copy(isProjectPersisted = true)
+            } else {
+                state
+            }
         }
     }
 

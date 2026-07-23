@@ -506,9 +506,10 @@ fun SplitFrameApp(
                         var foregroundVideoWorkId by remember(projectId) {
                             mutableStateOf<String?>(null)
                         }
-                        LaunchedEffect(videoState.project?.id) {
+                        LaunchedEffect(videoState.project?.id, videoState.isProjectPersisted) {
                             if (
                                 videoState.project?.id == projectId &&
+                                videoState.isProjectPersisted &&
                                 route.createVideoProjectIfMissing
                             ) {
                                 route = route.copy(createVideoProjectIfMissing = false)

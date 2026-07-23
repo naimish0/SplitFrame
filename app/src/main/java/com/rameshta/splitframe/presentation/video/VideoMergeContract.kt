@@ -128,6 +128,7 @@ enum class VideoEditorStatus {
 
 data class VideoMergeState(
     val project: VideoMergeProject? = null,
+    val isProjectPersisted: Boolean = false,
     val selectedClipIndex: Int = 0,
     val status: VideoEditorStatus = VideoEditorStatus.Initial,
     val playbackPositionMs: Long = 0L,
